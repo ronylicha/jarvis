@@ -41,16 +41,17 @@ class SpeakRequest(BaseModel):
 
 @app.get("/health")
 async def health():
-    """Health check with binary and voices status."""
+    """Health check — no filesystem paths exposed to clients."""
     binary_ok = settings.piper_binary_abs.exists()
     voices = list_available_voices()
     status = "ok" if (binary_ok and len(voices) > 0) else "degraded"
     return {
         "status": status,
         "binary_exists": binary_ok,
-        "binary_path": str(settings.piper_binary_abs),
         "voices_count": len(voices),
         "default_voice": settings.default_voice,
+        "service": "jarvis-tts",
+        "version": "0.1.0",
     }
 
 
@@ -74,8 +75,12 @@ async def speak(request: SpeakRequest):
             speed=request.speed,
         )
     except PiperError as exc:
+        # Log full error server-side, return generic message to client
         logger.error("tts.synthesize_error", error=str(exc))
-        raise HTTPException(status_code=503, detail=str(exc))
+        raise HTTPException(
+            status_code=503,
+            detail="Speech synthesis failed. Check server logs for details.",
+        )
 
     return Response(
         content=result.audio_bytes,

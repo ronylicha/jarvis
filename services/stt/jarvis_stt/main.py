@@ -33,16 +33,16 @@ app = FastAPI(title="Jarvis STT", version="0.1.0", lifespan=lifespan)
 
 @app.get("/health")
 async def health():
-    """Health check with binary and model status."""
+    """Health check — no filesystem paths exposed to clients."""
     binary_ok = settings.whisper_binary_abs.exists()
     model_ok = settings.model_path_abs.exists()
     status = "ok" if (binary_ok and model_ok) else "degraded"
     return {
         "status": status,
         "binary_exists": binary_ok,
-        "binary_path": str(settings.whisper_binary_abs),
         "model_exists": model_ok,
-        "model_path": str(settings.model_path_abs),
+        "service": "jarvis-stt",
+        "version": "0.1.0",
     }
 
 
@@ -61,7 +61,7 @@ async def transcribe_endpoint(
     if len(contents) > max_bytes:
         raise HTTPException(
             status_code=413,
-            detail=f"Audio too large ({len(contents)} bytes). Max {settings.max_audio_size_mb} MB.",
+            detail=f"Audio too large. Max {settings.max_audio_size_mb} MB.",
         )
     if len(contents) == 0:
         raise HTTPException(status_code=400, detail="Empty audio file.")
@@ -69,8 +69,12 @@ async def transcribe_endpoint(
     try:
         result: TranscriptionResult = await transcribe(contents, language=language)
     except WhisperError as exc:
+        # Log full error server-side, return generic message to client
         logger.error("stt.transcribe_error", error=str(exc))
-        raise HTTPException(status_code=503, detail=str(exc))
+        raise HTTPException(
+            status_code=503,
+            detail="Transcription failed. Check server logs for details.",
+        )
 
     return JSONResponse(content={
         "text": result.text,
@@ -84,13 +88,14 @@ async def transcribe_stream(ws: WebSocket):
     """WebSocket endpoint for streaming transcription.
 
     Protocol:
-      - Client sends binary audio chunks
-      - Client sends JSON {"action": "finalize"} to trigger transcription
-      - Server responds with JSON {"text": "...", "language": "..."}
+    - Client sends binary audio chunks (enforced max size per config)
+    - Client sends JSON {"action": "finalize"} to trigger transcription
+    - Server responds with JSON {"text": "...", "language": "..."}
     """
     await ws.accept()
     buffer = bytearray()
     language: str | None = None
+    max_bytes = settings.max_audio_size_mb * 1024 * 1024
 
     try:
         while True:
@@ -98,6 +103,13 @@ async def transcribe_stream(ws: WebSocket):
 
             if "bytes" in message and message["bytes"]:
                 buffer.extend(message["bytes"])
+                # Defense-in-depth: enforce size limit on every chunk
+                if len(buffer) > max_bytes:
+                    await ws.send_json({
+                        "error": f"Audio exceeds {settings.max_audio_size_mb} MB limit",
+                    })
+                    await ws.close(code=1009)
+                    return
 
             elif "text" in message and message["text"]:
                 try:
@@ -122,7 +134,11 @@ async def transcribe_stream(ws: WebSocket):
                             "language": result.language,
                         })
                     except WhisperError as exc:
-                        await ws.send_json({"error": str(exc)})
+                        # Log full error server-side only
+                        logger.error("stt.stream_transcribe_error", error=str(exc))
+                        await ws.send_json({
+                            "error": "Transcription failed. Check server logs.",
+                        })
                     buffer.clear()
 
                 elif action == "reset":
@@ -136,7 +152,10 @@ async def transcribe_stream(ws: WebSocket):
         logger.info("stt.stream_disconnect")
     except Exception as exc:
         logger.error("stt.stream_error", error=str(exc))
-        await ws.close(code=1011)
+        try:
+            await ws.close(code=1011)
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
