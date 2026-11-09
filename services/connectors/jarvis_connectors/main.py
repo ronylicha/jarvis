@@ -1,6 +1,7 @@
 """Jarvis Connectors FastAPI application."""
 
 import asyncio
+import re
 import shlex
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -65,41 +66,57 @@ class GoogleCalendarRequest(BaseModel):
 
 # --- Shell-safe executor ---
 
-def _is_command_allowed(command: str) -> bool:
-    """Check if a command is in the allowlist."""
-    parts = shlex.split(command)
+_SHELL_METACHARACTERS = re.compile(r'[;|&$`\n\r(){}<>\\!]')
+
+
+def _is_command_allowed(command: str) -> tuple[bool, list[str]]:
+    """Check if a command is in the allowlist. Returns (allowed, parsed_parts).
+
+    Rejects any command containing shell metacharacters to prevent parser
+    differential attacks between shlex and /bin/sh. The caller MUST use
+    create_subprocess_exec with the returned parts (never create_subprocess_shell).
+    """
+    if _SHELL_METACHARACTERS.search(command):
+        return False, []
+
+    try:
+        parts = shlex.split(command)
+    except ValueError:
+        return False, []
+
     if not parts:
-        return False
-    base_cmd = parts[0]  # First token of the command
+        return False, []
+
+    base_cmd = parts[0]
     for allowed in settings.allowed_shell_commands:
         allowed_parts = shlex.split(allowed)
         if not allowed_parts:
             continue
-        # Exact prefix match: "git status --short" matches allowlist entry "git status"
         if parts[:len(allowed_parts)] == allowed_parts:
-            return True
-        # Single-word allowlist entry matches any subcommand: "ls" matches "ls -la"
+            return True, parts
         if base_cmd == allowed_parts[0] and len(allowed_parts) == 1:
-            return True
-    return False
+            return True, parts
+    return False, []
 
 
 @app.post("/shell/exec", dependencies=[Depends(verify_token)])
 async def shell_exec(request: ShellRequest):
     """Execute an allowed shell command safely.
 
-    Only commands in the allowlist are permitted. All others are rejected.
+    Uses create_subprocess_exec (not shell) to eliminate shell injection.
+    Commands containing shell metacharacters (;|&$` etc.) are always rejected.
     """
-    if not _is_command_allowed(request.command):
+    allowed, parsed_parts = _is_command_allowed(request.command)
+    if not allowed:
         logger.warning("connectors.shell_rejected", command=request.command)
         raise HTTPException(
             status_code=403,
-            detail=f"Command not in allowlist. Allowed: {settings.allowed_shell_commands}",
+            detail="Command not in allowlist or contains forbidden characters.",
         )
 
     try:
-        proc = await asyncio.create_subprocess_shell(
-            request.command,
+        proc = await asyncio.create_subprocess_exec(
+            *parsed_parts,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -146,12 +163,18 @@ async def fs_read(request: FileReadRequest):
         raise HTTPException(status_code=400, detail="Not a regular file")
 
     try:
-        lines = safe_path.read_text(errors="replace").splitlines()[:request.max_lines]
+        # Stream-read to avoid loading entire file into memory for large files
+        import itertools
+        with open(safe_path, errors="replace") as f:
+            lines = list(itertools.islice(f, request.max_lines))
+        # Count total lines without loading full file (bounded scan)
+        with open(safe_path, errors="replace") as f:
+            total_lines = sum(1 for _ in f)
         return {
             "path": str(safe_path),
-            "lines": lines,
-            "total_lines": len(safe_path.read_text(errors="replace").splitlines()),
-            "truncated": len(lines) < len(safe_path.read_text(errors="replace").splitlines()),
+            "lines": [line.rstrip("\n") for line in lines],
+            "total_lines": total_lines,
+            "truncated": len(lines) < total_lines,
         }
     except PermissionError:
         raise HTTPException(status_code=403, detail="Permission denied")
@@ -186,7 +209,7 @@ async def fs_list(path: str = "/", max_items: int = 50):
 # --- Google Workspace (stub — requires OAuth2 setup) ---
 
 @app.get("/google/calendar", dependencies=[Depends(verify_token)])
-async def google_calendar(max_results: int = 10):
+async def google_calendar(max_results: int = Field(default=10, ge=1, le=100)):
     """List upcoming Google Calendar events.
 
     Requires OAuth2 credentials in data/connectors/google-credentials.json.
