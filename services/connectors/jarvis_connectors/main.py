@@ -55,7 +55,9 @@ class ShellRequest(BaseModel):
 
 class FileReadRequest(BaseModel):
     path: str = Field(..., min_length=1)
-    max_lines: int = Field(default=100, ge=1, le=10
+    max_lines: int = Field(default=100, ge=1, le=10000)
+
+
 class GoogleCalendarRequest(BaseModel):
     max_results: int = Field(default=10, ge=1, le=100)
     time_min: str | None = None  # ISO 8601
@@ -68,11 +70,15 @@ def _is_command_allowed(command: str) -> bool:
     parts = shlex.split(command)
     if not parts:
         return False
-    base_cmd = parts    # Check exact match and prefix match (e.g., "git status" matches "git status --short")
+    base_cmd = parts[0]  # First token of the command
     for allowed in settings.allowed_shell_commands:
         allowed_parts = shlex.split(allowed)
+        if not allowed_parts:
+            continue
+        # Exact prefix match: "git status --short" matches allowlist entry "git status"
         if parts[:len(allowed_parts)] == allowed_parts:
             return True
+        # Single-word allowlist entry matches any subcommand: "ls" matches "ls -la"
         if base_cmd == allowed_parts[0] and len(allowed_parts) == 1:
             return True
     return False
@@ -177,7 +183,9 @@ async def fs_list(path: str = "/", max_items: int = 50):
         raise HTTPException(status_code=403, detail="Permission denied")
 
 
-# --- Google Workspace (stub — requires OAuth2 setup@app.get("/google/calendar", dependencies=[Depends(verify_token)])
+# --- Google Workspace (stub — requires OAuth2 setup) ---
+
+@app.get("/google/calendar", dependencies=[Depends(verify_token)])
 async def google_calendar(max_results: int = 10):
     """List upcoming Google Calendar events.
 
