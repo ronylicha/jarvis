@@ -13,6 +13,32 @@ logger = structlog.get_logger(__name__)
 
 PROVIDERS = ("anthropic", "openai", "google", "moonshot", "minimax", "zhipu", "openrouter", "ollama")
 
+# Per-provider model allowlists — reject unknown models before forwarding to API
+_MODEL_ALLOWLISTS: dict[str, frozenset[str]] = {
+    "anthropic": frozenset({
+        "claude-opus-4-20250514", "claude-sonnet-4-20250514", "claude-haiku-3-5-20241022",
+    }),
+    "openai": frozenset({
+        "o3", "gpt-4o", "gpt-4o-mini", "codex-mini-latest",
+    }),
+    "google": frozenset({
+        "gemini-2.5-pro", "gemini-2.0-flash", "gemini-2.5-flash-lite",
+    }),
+    "moonshot": frozenset({
+        "kimi-k2", "moonshot-v1-128k", "moonshot-v1-8k",
+    }),
+    "minimax": frozenset({
+        "MiniMax-M1", "abab7-chat",
+    }),
+    "zhipu": frozenset({
+        "glm-4-plus", "glm-4-flash", "codegeex-4",
+    }),
+    "openrouter": frozenset({
+        "meta-llama/llama-4-maverick", "qwen/qwen3-235b-a22b", "deepseek/deepseek-r1",
+    }),
+    # Ollama models are local and dynamic — no allowlist enforcement
+}
+
 # Allowed hosts for Ollama (local-only)
 _ALLOWED_OLLAMA_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
@@ -75,6 +101,15 @@ class LLMRouter:
         prov = provider or settings.default_provider
         if prov not in PROVIDERS:
             raise LLMRouterError(f"Unknown provider: {prov}. Available: {PROVIDERS}")
+
+        # Validate model against per-provider allowlist before forwarding
+        if model is not None and prov in _MODEL_ALLOWLISTS:
+            allowed = _MODEL_ALLOWLISTS[prov]
+            if model not in allowed:
+                raise LLMRouterError(
+                    f"Invalid model '{model}' for provider '{prov}'. "
+                    f"Allowed: {sorted(allowed)}"
+                )
 
         dispatch = {
             "anthropic": self._chat_anthropic,

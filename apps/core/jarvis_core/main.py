@@ -22,13 +22,20 @@ router = LLMRouter()
 async def verify_chat_token(x_jarvis_token: str = Header(default="")) -> str:
     """Verify bearer token for /chat endpoint.
 
-    If JARVIS_CORE_API_TOKEN is unset, auth is disabled (local dev).
-    When set, every /chat request MUST include a valid X-Jarvis-Token header.
+    Fail-closed: if JARVIS_CORE_API_TOKEN is set but empty, reject all requests
+    (misconfiguration, not "auth disabled"). Only truly unset env var disables auth.
     """
-    expected = os.environ.get("JARVIS_CORE_API_TOKEN")
-    if expected is None:
+    raw = os.environ.get("JARVIS_CORE_API_TOKEN")
+    if raw is None:
+        # Env var truly unset → local dev mode, no auth required
         return "__anonymous__"
-    if not x_jarvis_token or not hmac.compare_digest(x_jarvis_token, expected):
+    if not raw:
+        # Env var set to empty string → misconfiguration, refuse all requests
+        raise HTTPException(
+            status_code=500,
+            detail="JARVIS_CORE_API_TOKEN is set but empty. Fix configuration or unset the variable.",
+        )
+    if not x_jarvis_token or not hmac.compare_digest(x_jarvis_token, raw):
         raise HTTPException(status_code=403, detail="Invalid or missing token")
     return "__authenticated__"
 
