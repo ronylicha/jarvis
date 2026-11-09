@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 import structlog
@@ -11,6 +12,25 @@ from jarvis_core.config import settings
 logger = structlog.get_logger(__name__)
 
 PROVIDERS = ("anthropic", "openai", "google", "moonshot", "ollama")
+
+# Allowed hosts for Ollama (local-only)
+_ALLOWED_OLLAMA_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+def _validate_ollama_url(url: str) -> str:
+    """Validate Ollama URL is local-only to prevent SSRF.
+
+    Only http://localhost or http://127.0.0.1 are permitted.
+    Rejects cloud metadata IPs, private ranges, non-http schemes.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme != "http":
+        raise ValueError(f"Ollama URL must use http scheme, got: {parsed.scheme}")
+    if parsed.hostname not in _ALLOWED_OLLAMA_HOSTS:
+        raise ValueError(
+            f"Ollama URL must point to localhost/127.0.0.1, got: {parsed.hostname}"
+        )
+    return url
 
 
 @dataclass(frozen=True)
@@ -32,6 +52,12 @@ class LLMRouter:
 
     def __init__(self) -> None:
         self._client = httpx.AsyncClient(timeout=settings.request_timeout_seconds)
+        # Validate Ollama URL at init time — fail fast on misconfiguration
+        try:
+            self._validated_ollama_url = _validate_ollama_url(settings.ollama_base_url)
+        except ValueError as exc:
+            logger.warning("llm.ollama_url_invalid", error=str(exc))
+            self._validated_ollama_url = None
 
     async def close(self) -> None:
         await self._client.aclose()
@@ -62,7 +88,9 @@ class LLMRouter:
         logger.info("llm.chat_start", provider=prov, messages=len(messages))
 
         try:
-            result = await handler(messages, model=model, max_tokens=max_tokens, temperature=temperature)
+            result = await handler(
+                messages, model=model, max_tokens=max_tokens, temperature=temperature
+            )
             logger.info("llm.chat_done", provider=prov, chars=len(result.content))
             return result
         except Exception as exc:
@@ -72,12 +100,16 @@ class LLMRouter:
     # --- Provider implementations ---
 
     async def _chat_anthropic(
-        self, messages: list[dict[str, str]], *, model: str | None, max_tokens: int, temperature: float
+        self,
+        messages: list[dict[str, str]],
+        *,
+        model: str | None,
+        max_tokens: int,
+        temperature: float,
     ) -> LLMResponse:
         if not settings.anthropic_api_key:
             raise LLMRouterError("ANTHROPIC_API_KEY not configured")
 
-        # Convert OpenAI-style messages to Anthropic format
         system_msg = ""
         user_messages = []
         for msg in messages:
@@ -105,25 +137,42 @@ class LLMRouter:
         data = resp.json()
 
         content_parts = data.get("content", [])
-        text = "".join(p.get("text", "") for p in content_parts if p.get("type") == "text")
+        text = "".join(
+            p.get("text", "") for p in content_parts if p.get("type") == "text"
+        )
         usage = data.get("usage")
 
         return LLMResponse(
             content=text,
             provider="anthropic",
             model=data.get("model", model or "unknown"),
-            usage={"input": usage.get("input_tokens", 0), "output": usage.get("output_tokens", 0)} if usage else None,
+            usage=(
+                {
+                    "input": usage.get("input_tokens", 0),
+                    "output": usage.get("output_tokens", 0),
+                }
+                if usage
+                else None
+            ),
         )
 
     async def _chat_openai(
-        self, messages: list[dict[str, str]], *, model: str | None, max_tokens: int, temperature: float
+        self,
+        messages: list[dict[str, str]],
+        *,
+        model: str | None,
+        max_tokens: int,
+        temperature: float,
     ) -> LLMResponse:
         if not settings.openai_api_key:
             raise LLMRouterError("OPENAI_API_KEY not configured")
 
         resp = await self._client.post(
             "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {settings.openai_api_key}", "content-type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {settings.openai_api_key}",
+                "content-type": "application/json",
+            },
             json={
                 "model": model or "gpt-4o",
                 "messages": messages,
@@ -141,16 +190,27 @@ class LLMRouter:
             content=choice.get("content", ""),
             provider="openai",
             model=data.get("model", model or "unknown"),
-            usage={"input": usage.get("prompt_tokens", 0), "output": usage.get("completion_tokens", 0)} if usage else None,
+            usage=(
+                {
+                    "input": usage.get("prompt_tokens", 0),
+                    "output": usage.get("completion_tokens", 0),
+                }
+                if usage
+                else None
+            ),
         )
 
     async def _chat_google(
-        self, messages: list[dict[str, str]], *, model: str | None, max_tokens: int, temperature: float
+        self,
+        messages: list[dict[str, str]],
+        *,
+        model: str | None,
+        max_tokens: int,
+        temperature: float,
     ) -> LLMResponse:
         if not settings.google_api_key:
             raise LLMRouterError("GOOGLE_API_KEY not configured")
 
-        # Convert to Gemini format
         contents = []
         system_instruction = None
         for msg in messages:
@@ -161,13 +221,20 @@ class LLMRouter:
                 contents.append({"role": role, "parts": [{"text": msg["content"]}]})
 
         gemini_model = model or "gemini-2.0-flash"
+        # SECURITY: API key passed via header, NOT query param (prevents URL/log leakage)
         resp = await self._client.post(
             f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent",
-            params={"key": settings.google_api_key},
+            headers={
+                "x-goog-api-key": settings.google_api_key,
+                "content-type": "application/json",
+            },
             json={
                 "contents": contents,
                 "systemInstruction": system_instruction,
-                "generationConfig": {"maxOutputTokens": max_tokens, "temperature": temperature},
+                "generationConfig": {
+                    "maxOutputTokens": max_tokens,
+                    "temperature": temperature,
+                },
             },
         )
         resp.raise_for_status()
@@ -176,19 +243,29 @@ class LLMRouter:
         candidates = data.get("candidates", [])
         text = ""
         if candidates and candidates[0].get("content", {}).get("parts"):
-            text = "".join(p.get("text", "") for p in candidates[0]["content"]["parts"])
+            text = "".join(
+                p.get("text", "") for p in candidates[0]["content"]["parts"]
+            )
 
         return LLMResponse(content=text, provider="google", model=gemini_model)
 
     async def _chat_moonshot(
-        self, messages: list[dict[str, str]], *, model: str | None, max_tokens: int, temperature: float
+        self,
+        messages: list[dict[str, str]],
+        *,
+        model: str | None,
+        max_tokens: int,
+        temperature: float,
     ) -> LLMResponse:
         if not settings.moonshot_api_key:
             raise LLMRouterError("MOONSHOT_API_KEY not configured")
 
         resp = await self._client.post(
             "https://api.moonshot.cn/v1/chat/completions",
-            headers={"Authorization": f"Bearer {settings.moonshot_api_key}", "content-type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {settings.moonshot_api_key}",
+                "content-type": "application/json",
+            },
             json={
                 "model": model or "moonshot-v1-8k",
                 "messages": messages,
@@ -207,11 +284,23 @@ class LLMRouter:
         )
 
     async def _chat_ollama(
-        self, messages: list[dict[str, str]], *, model: str | None, max_tokens: int, temperature: float
+        self,
+        messages: list[dict[str, str]],
+        *,
+        model: str | None,
+        max_tokens: int,
+        temperature: float,
     ) -> LLMResponse:
+        # SECURITY: URL validated at init time against localhost allowlist
+        if self._validated_ollama_url is None:
+            raise LLMRouterError(
+                "Ollama URL is invalid or not configured. "
+                "Must be http://localhost or http://127.0.0.1"
+            )
+
         ollama_model = model or settings.ollama_model
         resp = await self._client.post(
-            f"{settings.ollama_base_url}/api/chat",
+            f"{self._validated_ollama_url}/api/chat",
             json={
                 "model": ollama_model,
                 "messages": messages,
@@ -240,9 +329,13 @@ class LLMRouter:
             "openai": settings.openai_api_key,
             "google": settings.google_api_key,
             "moonshot": settings.moonshot_api_key,
-            "ollama": True,  # Always available if Ollama is running
+            "ollama": self._validated_ollama_url is not None,
         }
         return [
-            {"name": name, "configured": bool(key_map.get(name)), "default": name == settings.default_provider}
+            {
+                "name": name,
+                "configured": bool(key_map.get(name)),
+                "default": name == settings.default_provider,
+            }
             for name in PROVIDERS
         ]
