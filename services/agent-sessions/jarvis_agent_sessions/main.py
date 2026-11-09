@@ -52,17 +52,12 @@ app = FastAPI(title="Jarvis Agent Sessions", version="0.1.0", lifespan=lifespan)
 
 @app.get("/health")
 async def health():
-    """Health check with proxy relay status."""
-    relay_status = "unknown"
-    try:
-        data = scan_all_sessions()
-        relay_status = "active" if data.get("proxy_relay") else "inactive"
-    except Exception as exc:
-        logger.error("agent_sessions.health_error", error=str(exc))
+    """Static health check — no session scanning to avoid info disclosure.
 
+    Detailed status (sessions, proxy relay) requires authentication via /sessions.
+    """
     return {
         "status": "ok",
-        "proxy_relay": relay_status,
         "service": "jarvis-agent-sessions",
         "version": "0.1.0",
     }

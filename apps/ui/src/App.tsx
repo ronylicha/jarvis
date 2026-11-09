@@ -424,7 +424,19 @@ function SessionsPanel() {
  async function connectSSE() {
  try {
  abortController = new AbortController();
+                // Read token from localStorage for authenticated SSE
+                let headers: Record<string, string> = {};
+                try {
+                    const storedKeys = localStorage.getItem('jarvis_api_keys');
+                    if (storedKeys) {
+                        const keys = JSON.parse(storedKeys);
+                        const token = keys['agent_sessions_token'];
+                        if (token) headers['X-Jarvis-Token'] = token;
+                    }
+                } catch { /* ignore parse errors */ }
+
  const resp = await fetch('http://localhost:8007/sessions/stream', {
+                    headers,
  signal: abortController.signal,
  });
  if (!resp.ok || !resp.body) {

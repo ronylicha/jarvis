@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings
 class AgentSessionsSettings(BaseSettings):
     """Agent sessions service configuration."""
 
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = 8007
 
     # GhostCLI proxy relay (token counting passes through this)
