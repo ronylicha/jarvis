@@ -480,11 +480,11 @@ function ChatPanel() {
 
  const reader = resp.body.getReader();
  const decoder = new TextDecoder();
- let accumulated = '';
+ let finalContent = '';
  let finalProvider = selectedProvider;
  let finalModel = selectedModel;
- let finalUsage: Record<string, number> | undefined;
 
+ // Read SSE events — server now emits single complete event (no fake chunking)
  while (true) {
  const { done, value } = await reader.read();
  if (done) break;
@@ -504,19 +504,16 @@ function ChatPanel() {
  throw new Error(event.error);
  }
 
- if (event.content) {
- accumulated += event.content;
- setStreamingContent(accumulated);
- }
-
- if (event.done) {
+ if (event.done && event.content !== undefined) {
+ finalContent = event.content;
  finalProvider = event.provider || finalProvider;
  finalModel = event.model || finalModel;
- finalUsage = event.usage;
  }
  } catch (parseErr) {
- if (parseErr instanceof Error && parseErr.message !== event?.error) {
+ if (parseErr instanceof Error && !parseErr.message.includes('LLM request failed')) {
  // Skip malformed SSE lines silently
+ } else if (parseErr instanceof Error) {
+ throw parseErr; // Re-throw actual API errors
  }
  }
  }
@@ -525,10 +522,10 @@ function ChatPanel() {
  const totalInputChars = allMessages.reduce((sum, m) => sum + m.content.length, 0);
  const assistantMsg: ChatMessage = {
  role: 'assistant',
- content: accumulated,
+ content: finalContent,
  provider: finalProvider,
  model: finalModel,
- costEstimate: estimateCost(totalInputChars, accumulated.length),
+ costEstimate: estimateCost(totalInputChars, finalContent.length),
  timestamp: Date.now(),
  };
 

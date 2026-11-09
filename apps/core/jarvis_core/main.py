@@ -127,47 +127,53 @@ async def chat(request: ChatRequest):
     return response
 
 
+# Concurrency limiter for streaming endpoint — prevents resource amplification
+_stream_semaphore = asyncio.Semaphore(5)
+
+
 @app.post("/chat/stream", dependencies=[Depends(verify_chat_token)])
 async def chat_stream(request: ChatRequest):
     """Streaming SSE endpoint for chat completions.
 
-    Emits Server-Sent Events with incremental content chunks.
-    Format: data: {"content": "...", "done": false}\n\n
-    Final event: data: {"content": "", "done": true, "provider": "...", "model": "..."}\n\n
+    NOTE: Current implementation uses simulated streaming (full response
+    buffered server-side, then chunked to client). True provider-native
+    streaming requires per-provider stream=True support in llm_router.
+    This is a known limitation tracked for future improvement.
+
+    Security measures:
+    - Concurrency limited to 5 simultaneous streams via semaphore
+    - Error details logged server-side only; generic message sent to client
+    - Single SSE event emitted (no artificial chunking/delays)
     """
     async def event_generator():
-        try:
-            result: LLMResponse = await router.chat(
-                messages=request.messages,
-                provider=request.provider,
-                model=request.model,
-                max_tokens=request.max_tokens,
-                temperature=request.temperature,
-            )
+        async with _stream_semaphore:
+            try:
+                result: LLMResponse = await router.chat(
+                    messages=request.messages,
+                    provider=request.provider,
+                    model=request.model,
+                    max_tokens=request.max_tokens,
+                    temperature=request.temperature,
+                )
 
-            # Stream content in chunks for progressive UI rendering
-            chunk_size = 20
-            content = result.content
-            for i in range(0, len(content), chunk_size):
-                chunk = content[i:i + chunk_size]
-                event = json.dumps({"content": chunk, "done": False})
+                # Emit complete response in single event (no fake chunking)
+                event = json.dumps({
+                    "content": result.content,
+                    "done": True,
+                    "provider": result.provider,
+                    "model": result.model,
+                    "usage": result.usage,
+                })
                 yield f"data: {event}\n\n"
-                await asyncio.sleep(0.01)  # Small delay for smooth UI rendering
 
-            # Final event with metadata
-            final = json.dumps({
-                "content": "",
-                "done": True,
-                "provider": result.provider,
-                "model": result.model,
-                "usage": result.usage,
-            })
-            yield f"data: {final}\n\n"
-
-        except LLMRouterError as exc:
-            logger.error("core.stream_error", error=str(exc))
-            error_event = json.dumps({"error": str(exc), "done": True})
-            yield f"data: {error_event}\n\n"
+            except LLMRouterError as exc:
+                # SECURITY: log full error server-side, send generic message to client
+                logger.error("core.stream_error", error=str(exc))
+                error_event = json.dumps({
+                    "error": "LLM request failed. Check server logs.",
+                    "done": True,
+                })
+                yield f"data: {error_event}\n\n"
 
     return StreamingResponse(
         event_generator(),
