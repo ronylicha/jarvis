@@ -27,8 +27,8 @@ importers:
         specifier: 2.0.0
         version: 2.0.0
       '@tauri-apps/plugin-shell':
-        specifier: 2.0.1
-        version: 2.0.1
+        specifier: 2.2.1
+        version: 2.2.1
       react:
         specifier: ^19.0.0
         version: 19.3.1
@@ -754,8 +754,8 @@ packages:
   '@tauri-apps/plugin-global-shortcut@2.0.0':
     resolution: {integrity: sha512-pnB4CUwFVjg4twtBSxoLJ4uLFTYxsvOdC1zIbG581pYzhYatOl6mjB+ijD5SSXgiS/jNoqMcfkOF9PWAisurew==}
 
-  '@tauri-apps/plugin-shell@2.0.1':
-    resolution: {integrity: sha512-akU1b77sw3qHiynrK0s930y8zKmcdrSD60htjH+mFZqv5WaakZA/XxHR3/sF1nNv9Mgmt/Shls37HwnOr00aSw==}
+  '@tauri-apps/plugin-shell@2.2.1':
+    resolution: {integrity: sha512-G1GFYyWe/KlCsymuLiNImUgC8zGY0tI0Y3p8JgBCWduR5IEXlIJS+JuG1qtveitwYXlfJrsExt3enhv5l2/yhA==}
 
   '@turbo/darwin-64@2.11.10':
     resolution: {integrity: sha512-By4idRap5+nLnMuRzLB4qkOPRlvNdyY1ne4VJYDyUoUB11H94k7uif9mbe3JT8JSNXs1D68uMcBj6hJ/jMQRvA==}
@@ -2184,7 +2184,7 @@ snapshots:
     dependencies:
       '@tauri-apps/api': 2.2.0
 
-  '@tauri-apps/plugin-shell@2.0.1':
+  '@tauri-apps/plugin-shell@2.2.1':
     dependencies:
       '@tauri-apps/api': 2.2.0
 
