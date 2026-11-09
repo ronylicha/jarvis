@@ -44,3 +44,4 @@ apps/ui/src-tauri/target/
 # Logs
 logs/
 *.log
+services/bin/whisper.cpp
