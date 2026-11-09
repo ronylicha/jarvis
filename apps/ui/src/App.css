@@ -632,6 +632,17 @@ body {
  white-space: pre-wrap;
 }
 
+.chat-msg-streaming {
+ border-left-color: var(--hud-amber);
+ opacity: 0.9;
+}
+
+.chat-streaming-indicator {
+ color: var(--hud-amber);
+ animation: pulse 1s ease-in-out infinite;
+ margin-left: auto;
+}
+
 .chat-loading {
  align-self: center;
  opacity: 0.6;

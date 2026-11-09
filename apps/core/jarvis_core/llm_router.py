@@ -122,18 +122,77 @@ class LLMRouter:
             "ollama": self._chat_ollama,
         }
 
-        handler = dispatch[prov]
-        logger.info("llm.chat_start", provider=prov, messages=len(messages))
+        # Build ordered provider list: requested first, then fallbacks
+        fallback_order = [prov] + [p for p in PROVIDERS if p != prov and p != "ollama"]
 
-        try:
-            result = await handler(
-                messages, model=model, max_tokens=max_tokens, temperature=temperature
+        last_error: Exception | None = None
+        for attempt_prov in fallback_order:
+            handler = dispatch.get(attempt_prov)
+            if handler is None:
+                continue
+
+            # Skip unconfigured providers during fallback
+            key_map = {
+                "anthropic": settings.anthropic_api_key,
+                "openai": settings.openai_api_key,
+                "google": settings.google_api_key,
+                "moonshot": settings.moonshot_api_key,
+                "minimax": settings.minimax_api_key,
+                "zhipu": settings.zhipu_api_key,
+                "openrouter": settings.openrouter_api_key,
+                "ollama": self._validated_ollama_url is not None,
+            }
+            if not key_map.get(attempt_prov):
+                continue
+
+            # Validate model only for the explicitly requested provider
+            if attempt_prov == prov and model is not None and prov in _MODEL_ALLOWLISTS:
+                allowed = _MODEL_ALLOWLISTS[prov]
+                if model not in allowed:
+                    raise LLMRouterError(
+                        f"Invalid model '{model}' for provider '{prov}'. "
+                        f"Allowed: {sorted(allowed)}"
+                    )
+
+            # For fallback providers, use their default model (ignore user's model choice)
+            attempt_model = model if attempt_prov == prov else None
+
+            logger.info(
+                "llm.chat_start",
+                provider=attempt_prov,
+                is_fallback=attempt_prov != prov,
+                messages=len(messages),
             )
-            logger.info("llm.chat_done", provider=prov, chars=len(result.content))
-            return result
-        except Exception as exc:
-            logger.error("llm.chat_error", provider=prov, error=str(exc))
-            raise LLMRouterError(f"{prov} failed: {exc}") from exc
+
+            try:
+                result = await handler(
+                    messages,
+                    model=attempt_model,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+                if attempt_prov != prov:
+                    logger.warning(
+                        "llm.fallback_used",
+                        original=prov,
+                        fallback=attempt_prov,
+                    )
+                logger.info("llm.chat_done", provider=attempt_prov, chars=len(result.content))
+                return result
+            except Exception as exc:
+                last_error = exc
+                logger.warning(
+                    "llm.chat_retry",
+                    provider=attempt_prov,
+                    error=str(exc),
+                    will_fallback=True,
+                )
+                continue
+
+        logger.error("llm.all_providers_failed", error=str(last_error))
+        raise LLMRouterError(
+            f"All providers failed. Last error ({prov}): {last_error}"
+        ) from last_error
 
     # --- Provider implementations ---
 

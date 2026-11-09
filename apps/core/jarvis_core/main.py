@@ -1,12 +1,15 @@
 """Jarvis Core FastAPI application — LLM router + orchestration hub."""
 
+import asyncio
 import hmac
+import json
 import os
 from contextlib import asynccontextmanager
 from typing import Any
 
 import structlog
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from jarvis_core.config import settings
@@ -122,6 +125,59 @@ async def chat(request: ChatRequest):
         response["usage"] = result.usage
 
     return response
+
+
+@app.post("/chat/stream", dependencies=[Depends(verify_chat_token)])
+async def chat_stream(request: ChatRequest):
+    """Streaming SSE endpoint for chat completions.
+
+    Emits Server-Sent Events with incremental content chunks.
+    Format: data: {"content": "...", "done": false}\n\n
+    Final event: data: {"content": "", "done": true, "provider": "...", "model": "..."}\n\n
+    """
+    async def event_generator():
+        try:
+            result: LLMResponse = await router.chat(
+                messages=request.messages,
+                provider=request.provider,
+                model=request.model,
+                max_tokens=request.max_tokens,
+                temperature=request.temperature,
+            )
+
+            # Stream content in chunks for progressive UI rendering
+            chunk_size = 20
+            content = result.content
+            for i in range(0, len(content), chunk_size):
+                chunk = content[i:i + chunk_size]
+                event = json.dumps({"content": chunk, "done": False})
+                yield f"data: {event}\n\n"
+                await asyncio.sleep(0.01)  # Small delay for smooth UI rendering
+
+            # Final event with metadata
+            final = json.dumps({
+                "content": "",
+                "done": True,
+                "provider": result.provider,
+                "model": result.model,
+                "usage": result.usage,
+            })
+            yield f"data: {final}\n\n"
+
+        except LLMRouterError as exc:
+            logger.error("core.stream_error", error=str(exc))
+            error_event = json.dumps({"error": str(exc), "done": True})
+            yield f"data: {error_event}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 if __name__ == "__main__":

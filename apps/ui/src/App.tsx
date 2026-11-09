@@ -389,16 +389,41 @@ interface ChatMessage {
  timestamp: number;
 }
 
+const CHAT_STORAGE_KEY = 'jarvis_chat_history';
+
+function loadChatHistory(): ChatMessage[] {
+ try {
+ const stored = localStorage.getItem(CHAT_STORAGE_KEY);
+ return stored ? JSON.parse(stored) : [];
+ } catch {
+ return [];
+ }
+}
+
+function saveChatHistory(msgs: ChatMessage[]) {
+ try {
+ // Keep last 200 messages to avoid localStorage overflow
+ const trimmed = msgs.slice(-200);
+ localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(trimmed));
+ } catch { /* ignore quota errors */ }
+}
+
 function ChatPanel() {
- const [messages, setMessages] = useState<ChatMessage[]>([]);
+ const [messages, setMessages] = useState<ChatMessage[]>(loadChatHistory);
  const [input, setInput] = useState('');
  const [selectedProvider, setSelectedProvider] = useState(PROVIDERS[0].id);
  const [selectedModel, setSelectedModel] = useState(PROVIDERS[0].models[0].id);
  const [loading, setLoading] = useState(false);
  const [error, setError] = useState<string | null>(null);
+ const [streamingContent, setStreamingContent] = useState('');
 
  const currentProvider = PROVIDERS.find(p => p.id === selectedProvider) || PROVIDERS[0];
  const currentModel = currentProvider.models.find(m => m.id === selectedModel) || currentProvider.models[0];
+
+ // Persist messages to localStorage on every change
+ useEffect(() => {
+ saveChatHistory(messages);
+ }, [messages]);
 
  // Sync model when provider changes
  useEffect(() => {
@@ -426,14 +451,15 @@ function ChatPanel() {
  setInput('');
  setLoading(true);
  setError(null);
+ setStreamingContent('');
 
- try {
  const allMessages = [...messages, userMsg].map(m => ({
  role: m.role,
  content: m.content,
  }));
 
- const resp = await fetch('http://localhost:8003/chat', {
+ try {
+ const resp = await fetch('http://localhost:8003/chat/stream', {
  method: 'POST',
  headers: { 'Content-Type': 'application/json' },
  body: JSON.stringify({
@@ -448,22 +474,69 @@ function ChatPanel() {
  throw new Error(errData.detail || `HTTP ${resp.status}`);
  }
 
- const data = await resp.json();
+ if (!resp.body) {
+ throw new Error('Streaming not supported');
+ }
+
+ const reader = resp.body.getReader();
+ const decoder = new TextDecoder();
+ let accumulated = '';
+ let finalProvider = selectedProvider;
+ let finalModel = selectedModel;
+ let finalUsage: Record<string, number> | undefined;
+
+ while (true) {
+ const { done, value } = await reader.read();
+ if (done) break;
+
+ const chunk = decoder.decode(value, { stream: true });
+ const lines = chunk.split('\n');
+
+ for (const line of lines) {
+ if (!line.startsWith('data: ')) continue;
+ const jsonStr = line.slice(6).trim();
+ if (!jsonStr) continue;
+
+ try {
+ const event = JSON.parse(jsonStr);
+
+ if (event.error) {
+ throw new Error(event.error);
+ }
+
+ if (event.content) {
+ accumulated += event.content;
+ setStreamingContent(accumulated);
+ }
+
+ if (event.done) {
+ finalProvider = event.provider || finalProvider;
+ finalModel = event.model || finalModel;
+ finalUsage = event.usage;
+ }
+ } catch (parseErr) {
+ if (parseErr instanceof Error && parseErr.message !== event?.error) {
+ // Skip malformed SSE lines silently
+ }
+ }
+ }
+ }
+
+ const totalInputChars = allMessages.reduce((sum, m) => sum + m.content.length, 0);
  const assistantMsg: ChatMessage = {
  role: 'assistant',
- content: data.content,
- provider: data.provider,
- model: data.model,
- costEstimate: estimateCost(
- allMessages.reduce((sum, m) => sum + m.content.length, 0),
- data.content.length,
- ),
+ content: accumulated,
+ provider: finalProvider,
+ model: finalModel,
+ costEstimate: estimateCost(totalInputChars, accumulated.length),
  timestamp: Date.now(),
  };
 
  setMessages(prev => [...prev, assistantMsg]);
+ setStreamingContent('');
  } catch (exc) {
  setError(exc instanceof Error ? exc.message : 'Erreur inconnue');
+ setStreamingContent('');
  } finally {
  setLoading(false);
  }
@@ -514,7 +587,17 @@ function ChatPanel() {
  <div className="chat-msg-content">{msg.content}</div>
  </div>
  ))}
- {loading && <div className="chat-loading">⏳ Réponse en cours...</div>}
+ {loading && streamingContent && (
+ <div className="chat-msg chat-msg-assistant chat-msg-streaming">
+ <div className="chat-msg-header">
+ <span className="chat-msg-role">🤖 {selectedProvider}</span>
+ <span className="chat-msg-model">{selectedModel}</span>
+ <span className="chat-streaming-indicator">● streaming</span>
+ </div>
+ <div className="chat-msg-content">{streamingContent}</div>
+ </div>
+ )}
+ {loading && !streamingContent && <div className="chat-loading">⏳ Connexion au provider...</div>}
  {error && <div className="chat-error">❌ {error}</div>}
  </div>
 
