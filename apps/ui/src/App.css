@@ -1,0 +1,229 @@
+:root {
+  --hud-cyan: #00f0ff;
+  --hud-amber: #ffb800;
+  --hud-red: #ff3333;
+  --hud-green: #00ff88;
+  --hud-bg: rgba(0, 0, 0, 0.85);
+  --hud-border: rgba(0, 240, 255, 0.3);
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: transparent;
+  font-family: var(--font-mono);
+  color: var(--hud-cyan);
+  overflow: hidden;
+  user-select: none;
+}
+
+.jarvis-hud {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--hud-bg);
+  border: 1px solid var(--hud-border);
+}
+
+/* Header */
+.hud-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--hud-border);
+  background: rgba(0, 240, 255, 0.05);
+}
+
+.hud-logo {
+  font-size: 24px;
+  font-weight: bold;
+  letter-spacing: 4px;
+  text-shadow: 0 0 10px var(--hud-cyan);
+}
+
+.hud-clock {
+  font-size: 28px;
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+.hud-date {
+  font-size: 12px;
+  opacity: 0.7;
+  text-transform: uppercase;
+}
+
+/* Main grid */
+.hud-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 280px 1fr 280px;
+  gap: 1px;
+  background: var(--hud-border);
+}
+
+.hud-left, .hud-center, .hud-right {
+  background: var(--hud-bg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Waveform */
+.waveform-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 60px;
+  border: 1px solid var(--hud-border);
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.waveform-bar {
+  width: 8px;
+  background: var(--hud-cyan);
+  border-radius: 2px;
+  animation: waveform 0.8s ease-in-out infinite alternate;
+  box-shadow: 0 0 6px var(--hud-cyan);
+}
+
+@keyframes waveform {
+  0% { height: 8px; opacity: 0.4; }
+  100% { height: 40px; opacity: 1; }
+}
+
+/* Agent panel */
+.panel-title {
+  font-size: 11px;
+  letter-spacing: 3px;
+  opacity: 0.6;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.agent-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-online { background: var(--hud-green); box-shadow: 0 0 6px var(--hud-green); }
+.status-offline { background: var(--hud-red); opacity: 0.5; }
+.status-busy { background: var(--hud-amber); animation: pulse 1s infinite; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.agent-name { flex: 1; font-weight: bold; }
+.agent-provider { font-size: 10px; opacity: 0.5; text-transform: uppercase; }
+
+/* Center orb */
+.hud-center {
+  align-items: center;
+  justify-content: center;
+}
+
+.center-orb {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.orb-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid var(--hud-cyan);
+}
+
+.orb-ring-1 {
+  width: 180px;
+  height: 180px;
+  animation: spin 8s linear infinite;
+  border-style: dashed;
+  opacity: 0.4;
+}
+
+.orb-ring-2 {
+  width: 140px;
+  height: 140px;
+  animation: spin 5s linear infinite reverse;
+  border-style: dotted;
+  opacity: 0.6;
+}
+
+.orb-core {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--hud-cyan), transparent);
+  box-shadow: 0 0 30px var(--hud-cyan), 0 0 60px rgba(0, 240, 255, 0.3);
+  animation: breathe 3s ease-in-out infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes breathe {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+
+.center-status {
+  margin-top: 24px;
+  font-size: 14px;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  animation: blink 2s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Memory panel */
+.memory-item {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.1);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.memory-agent {
+  color: var(--hud-amber);
+  font-size: 10px;
+  margin-right: 4px;
+}
+
+.memory-content { opacity: 0.8; }
+.memory-empty, .memory-loading { opacity: 0.4; font-size: 11px; font-style: italic; }
+
+/* Footer */
+.hud-footer {
+  display: flex;
+  justify-content: space-around;
+  padding: 8px 24px;
+  border-top: 1px solid var(--hud-border);
+  font-size: 10px;
+  letter-spacing: 2px;
+  opacity: 0.6;
+  text-transform: uppercase;
+}

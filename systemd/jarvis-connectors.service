@@ -1,0 +1,14 @@
+[Unit]
+Description=Jarvis Connectors (Google Workspace, FS, Shell)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/projects/jarvis/services/connectors
+ExecStart=%h/projects/jarvis/.venv/bin/python -m jarvis_connectors.main
+Restart=on-failure
+RestartSec=5
+Environment=JARVIS_CONNECTORS_PORT=8005
+
+[Install]
+WantedBy=default.target

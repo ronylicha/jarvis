@@ -1,0 +1,14 @@
+[Unit]
+Description=Jarvis TTS Service (Piper)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/projects/jarvis/services/tts
+ExecStart=%h/projects/jarvis/.venv/bin/python -m jarvis_tts.main
+Restart=on-failure
+RestartSec=5
+Environment=JARVIS_TTS_PORT=8002
+
+[Install]
+WantedBy=default.target

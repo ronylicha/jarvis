@@ -1,0 +1,14 @@
+[Unit]
+Description=Jarvis Core (LLM Router + Orchestration)
+After=network.target jarvis-memory.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/projects/jarvis/apps/core
+ExecStart=%h/projects/jarvis/.venv/bin/python -m jarvis_core.main
+Restart=on-failure
+RestartSec=5
+Environment=JARVIS_CORE_PORT=8003
+
+[Install]
+WantedBy=default.target

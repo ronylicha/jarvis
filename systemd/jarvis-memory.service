@@ -1,0 +1,14 @@
+[Unit]
+Description=Jarvis Memory Service (SQLite + ChromaDB)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/projects/jarvis/services/memory
+ExecStart=%h/projects/jarvis/.venv/bin/python -m jarvis_memory.main
+Restart=on-failure
+RestartSec=5
+Environment=JARVIS_MEMORY_PORT=8004
+
+[Install]
+WantedBy=default.target

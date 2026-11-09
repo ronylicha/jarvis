@@ -1,0 +1,14 @@
+[Unit]
+Description=Jarvis STT Service (whisper.cpp)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/projects/jarvis/services/stt
+ExecStart=%h/projects/jarvis/.venv/bin/python -m jarvis_stt.main
+Restart=on-failure
+RestartSec=5
+Environment=JARVIS_STT_PORT=8001
+
+[Install]
+WantedBy=default.target
