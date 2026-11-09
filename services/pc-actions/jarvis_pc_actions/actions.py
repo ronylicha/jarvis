@@ -88,8 +88,20 @@ async def take_screenshot(region: tuple[int, int, int, int] | None = None) -> Sc
 
 # --- Clipboard ---
 
+def _truncate_by_bytes(text: str, max_bytes: int) -> str:
+    """Truncate text by byte length, not character count.
+
+    Handles multi-byte UTF-8 correctly by slicing at byte boundaries
+    and decoding back with error handling for partial characters.
+    """
+    encoded = text.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return text
+    return encoded[:max_bytes].decode("utf-8", errors="ignore")
+
+
 async def get_clipboard() -> str:
-    """Read text from the system clipboard."""
+    """Read text from the system clipboard with size enforcement."""
     try:
         proc = await asyncio.create_subprocess_exec(
             "xclip", "-selection", "clipboard", "-o",
@@ -97,17 +109,16 @@ async def get_clipboard() -> str:
         )
         stdout, _ = await proc.communicate()
         text = stdout.decode(errors="replace")
-        if len(text.encode()) > settings.max_clipboard_size_bytes:
-            return text[:settings.max_clipboard_size_bytes]
-        return text
+        return _truncate_by_bytes(text, settings.max_clipboard_size_bytes)
     except FileNotFoundError:
-        # Fallback to xsel
+        # Fallback to xsel — same size enforcement applied
         proc = await asyncio.create_subprocess_exec(
             "xsel", "--clipboard", "--output",
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
         stdout, _ = await proc.communicate()
-        return stdout.decode(errors="replace")
+        text = stdout.decode(errors="replace")
+        return _truncate_by_bytes(text, settings.max_clipboard_size_bytes)
 
 
 async def set_clipboard(text: str) -> bool:

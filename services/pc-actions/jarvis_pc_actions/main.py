@@ -26,10 +26,17 @@ logger = structlog.get_logger(__name__)
 # --- Auth ---
 
 async def verify_token(x_jarvis_token: str = Header(default="")) -> str:
-    """Verify bearer token. Disabled if JARVIS_PC_ACTIONS_API_TOKEN unset."""
+    """Verify bearer token. FAIL-CLOSED: rejects all requests when token is unset.
+
+    Set JARVIS_PC_ACTIONS_API_TOKEN env var to enable the service.
+    Without it, every request returns 403 to prevent accidental exposure.
+    """
     expected = os.environ.get("JARVIS_PC_ACTIONS_API_TOKEN")
     if expected is None:
-        return "__anonymous__"
+        raise HTTPException(
+            status_code=403,
+            detail="PC Actions service requires JARVIS_PC_ACTIONS_API_TOKEN to be set.",
+        )
     if not x_jarvis_token or not hmac.compare_digest(x_jarvis_token, expected):
         raise HTTPException(status_code=403, detail="Invalid or missing token")
     return "__authenticated__"
