@@ -1,10 +1,12 @@
 """Jarvis Core FastAPI application — LLM router + orchestration hub."""
 
+import hmac
+import os
 from contextlib import asynccontextmanager
 from typing import Any
 
 import structlog
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from jarvis_core.config import settings
@@ -13,6 +15,22 @@ from jarvis_core.llm_router import LLMResponse, LLMRouter, LLMRouterError
 logger = structlog.get_logger(__name__)
 
 router = LLMRouter()
+
+
+# --- Auth for /chat (fail-closed when token configured) ---
+
+async def verify_chat_token(x_jarvis_token: str = Header(default="")) -> str:
+    """Verify bearer token for /chat endpoint.
+
+    If JARVIS_CORE_API_TOKEN is unset, auth is disabled (local dev).
+    When set, every /chat request MUST include a valid X-Jarvis-Token header.
+    """
+    expected = os.environ.get("JARVIS_CORE_API_TOKEN")
+    if expected is None:
+        return "__anonymous__"
+    if not x_jarvis_token or not hmac.compare_digest(x_jarvis_token, expected):
+        raise HTTPException(status_code=403, detail="Invalid or missing token")
+    return "__authenticated__"
 
 
 @asynccontextmanager
@@ -25,7 +43,8 @@ async def lifespan(app: FastAPI):
         ],
         wrapper_class=structlog.make_filtering_bound_logger(logger.level),
     )
-    logger.info("core.startup", port=settings.port, default_provider=settings.default_provider)
+    auth_mode = "disabled" if os.environ.get("JARVIS_CORE_API_TOKEN") is None else "enabled"
+    logger.info("core.startup", port=settings.port, default_provider=settings.default_provider, auth=auth_mode)
     yield
     await router.close()
     logger.info("core.shutdown")
@@ -68,11 +87,11 @@ async def list_providers():
     return {"providers": router.get_available_providers()}
 
 
-@app.post("/chat")
+@app.post("/chat", dependencies=[Depends(verify_chat_token)])
 async def chat(request: ChatRequest):
     """Route a chat completion request to an LLM provider.
 
-    Specify provider explicitly or use the configured default.
+    Requires X-Jarvis-Token header when JARVIS_CORE_API_TOKEN is set.
     Messages follow OpenAI format: [{"role": "user", "content": "..."}]
     """
     try:

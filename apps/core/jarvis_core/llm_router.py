@@ -11,7 +11,7 @@ from jarvis_core.config import settings
 
 logger = structlog.get_logger(__name__)
 
-PROVIDERS = ("anthropic", "openai", "google", "moonshot", "ollama")
+PROVIDERS = ("anthropic", "openai", "google", "moonshot", "minimax", "zhipu", "openrouter", "ollama")
 
 # Allowed hosts for Ollama (local-only)
 _ALLOWED_OLLAMA_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
@@ -81,6 +81,9 @@ class LLMRouter:
             "openai": self._chat_openai,
             "google": self._chat_google,
             "moonshot": self._chat_moonshot,
+            "minimax": self._chat_minimax,
+            "zhipu": self._chat_zhipu,
+            "openrouter": self._chat_openrouter,
             "ollama": self._chat_ollama,
         }
 
@@ -283,6 +286,134 @@ class LLMRouter:
             model=data.get("model", model or "unknown"),
         )
 
+    async def _chat_minimax(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        model: str | None,
+        max_tokens: int,
+        temperature: float,
+    ) -> LLMResponse:
+        if not settings.minimax_api_key:
+            raise LLMRouterError("MINIMAX_API_KEY not configured")
+
+        resp = await self._client.post(
+            "https://api.minimax.chat/v1/text/chatcompletion_v2",
+            headers={
+                "Authorization": f"Bearer {settings.minimax_api_key}",
+                "content-type": "application/json",
+            },
+            json={
+                "model": model or "MiniMax-M1",
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        choices = data.get("choices", [])
+        text = choices[0].get("message", {}).get("content", "") if choices else ""
+        usage = data.get("usage")
+
+        return LLMResponse(
+            content=text,
+            provider="minimax",
+            model=data.get("model", model or "unknown"),
+            usage=(
+                {"input": usage.get("prompt_tokens", 0), "output": usage.get("completion_tokens", 0)}
+                if usage
+                else None
+            ),
+        )
+
+    async def _chat_zhipu(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        model: str | None,
+        max_tokens: int,
+        temperature: float,
+    ) -> LLMResponse:
+        if not settings.zhipu_api_key:
+            raise LLMRouterError("ZHIPU_API_KEY not configured")
+
+        # Zhipu/GLM uses OpenAI-compatible API format
+        resp = await self._client.post(
+            "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+            headers={
+                "Authorization": f"Bearer {settings.zhipu_api_key}",
+                "content-type": "application/json",
+            },
+            json={
+                "model": model or "glm-4-flash",
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        choice = data["choices"][0]["message"]
+        usage = data.get("usage")
+
+        return LLMResponse(
+            content=choice.get("content", ""),
+            provider="zhipu",
+            model=data.get("model", model or "unknown"),
+            usage=(
+                {"input": usage.get("prompt_tokens", 0), "output": usage.get("completion_tokens", 0)}
+                if usage
+                else None
+            ),
+        )
+
+    async def _chat_openrouter(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        model: str | None,
+        max_tokens: int,
+        temperature: float,
+    ) -> LLMResponse:
+        if not settings.openrouter_api_key:
+            raise LLMRouterError("OPENROUTER_API_KEY not configured")
+
+        # OpenRouter uses OpenAI-compatible API format
+        resp = await self._client.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {settings.openrouter_api_key}",
+                "content-type": "application/json",
+                "HTTP-Referer": "https://github.com/ronylicha/jarvis",
+                "X-Title": "Jarvis AI Assistant",
+            },
+            json={
+                "model": model or "meta-llama/llama-4-maverick",
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        choice = data["choices"][0]["message"]
+        usage = data.get("usage")
+
+        return LLMResponse(
+            content=choice.get("content", ""),
+            provider="openrouter",
+            model=data.get("model", model or "unknown"),
+            usage=(
+                {"input": usage.get("prompt_tokens", 0), "output": usage.get("completion_tokens", 0)}
+                if usage
+                else None
+            ),
+        )
+
     async def _chat_ollama(
         self,
         messages: list[dict[str, str]],
@@ -329,6 +460,9 @@ class LLMRouter:
             "openai": settings.openai_api_key,
             "google": settings.google_api_key,
             "moonshot": settings.moonshot_api_key,
+            "minimax": settings.minimax_api_key,
+            "zhipu": settings.zhipu_api_key,
+            "openrouter": settings.openrouter_api_key,
             "ollama": self._validated_ollama_url is not None,
         }
         return [

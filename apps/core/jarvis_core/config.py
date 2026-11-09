@@ -14,6 +14,9 @@ class CoreSettings(BaseSettings):
     openai_api_key: str = ""
     google_api_key: str = ""
     moonshot_api_key: str = ""
+    minimax_api_key: str = ""
+    zhipu_api_key: str = ""
+    openrouter_api_key: str = ""
 
     # Ollama (local fallback, installed later per user decision)
     ollama_base_url: str = "http://localhost:11434"

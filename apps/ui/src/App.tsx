@@ -3,7 +3,7 @@ import './App.css';
 
 // --- Types ---
 
-type Tab = 'dashboard' | 'agents' | 'settings' | 'memory';
+type Tab = 'dashboard' | 'chat' | 'agents' | 'settings' | 'memory';
 
 interface ProviderDef {
  id: string;
@@ -378,6 +378,168 @@ function MemoryView() {
  );
 }
 
+// --- Chat Panel ---
+
+interface ChatMessage {
+ role: 'user' | 'assistant';
+ content: string;
+ provider?: string;
+ model?: string;
+ costEstimate?: number; // $ estimated
+ timestamp: number;
+}
+
+function ChatPanel() {
+ const [messages, setMessages] = useState<ChatMessage[]>([]);
+ const [input, setInput] = useState('');
+ const [selectedProvider, setSelectedProvider] = useState(PROVIDERS[0].id);
+ const [selectedModel, setSelectedModel] = useState(PROVIDERS[0].models[0].id);
+ const [loading, setLoading] = useState(false);
+ const [error, setError] = useState<string | null>(null);
+
+ const currentProvider = PROVIDERS.find(p => p.id === selectedProvider) || PROVIDERS[0];
+ const currentModel = currentProvider.models.find(m => m.id === selectedModel) || currentProvider.models[0];
+
+ // Sync model when provider changes
+ useEffect(() => {
+ setSelectedModel(currentProvider.models[0]?.id || '');
+ }, [selectedProvider, currentProvider]);
+
+ const estimateCost = (inputChars: number, outputChars: number): number => {
+ const inputTokens = Math.ceil(inputChars / 4);
+ const outputTokens = Math.ceil(outputChars / 4);
+ const inputCost = (inputTokens / 1_000_000) * (currentModel.inputPrice ?? 0);
+ const outputCost = (outputTokens / 1_000_000) * (currentModel.outputPrice ?? 0);
+ return inputCost + outputCost;
+ };
+
+ const handleSend = useCallback(async () => {
+ if (!input.trim() || loading) return;
+
+ const userMsg: ChatMessage = {
+ role: 'user',
+ content: input.trim(),
+ timestamp: Date.now(),
+ };
+
+ setMessages(prev => [...prev, userMsg]);
+ setInput('');
+ setLoading(true);
+ setError(null);
+
+ try {
+ const allMessages = [...messages, userMsg].map(m => ({
+ role: m.role,
+ content: m.content,
+ }));
+
+ const resp = await fetch('http://localhost:8003/chat', {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({
+ messages: allMessages,
+ provider: selectedProvider,
+ model: selectedModel,
+ }),
+ });
+
+ if (!resp.ok) {
+ const errData = await resp.json().catch(() => ({}));
+ throw new Error(errData.detail || `HTTP ${resp.status}`);
+ }
+
+ const data = await resp.json();
+ const assistantMsg: ChatMessage = {
+ role: 'assistant',
+ content: data.content,
+ provider: data.provider,
+ model: data.model,
+ costEstimate: estimateCost(
+ allMessages.reduce((sum, m) => sum + m.content.length, 0),
+ data.content.length,
+ ),
+ timestamp: Date.now(),
+ };
+
+ setMessages(prev => [...prev, assistantMsg]);
+ } catch (exc) {
+ setError(exc instanceof Error ? exc.message : 'Erreur inconnue');
+ } finally {
+ setLoading(false);
+ }
+ }, [input, loading, messages, selectedProvider, selectedModel, currentModel]);
+
+ return (
+ <div className="chat-panel">
+ <h3 className="panel-title">CHAT INTERACTIF</h3>
+
+ {/* Provider + Model selector */}
+ <div className="chat-controls">
+ <select
+ className="chat-select"
+ value={selectedProvider}
+ onChange={(e) => setSelectedProvider(e.target.value)}
+ >
+ {PROVIDERS.map(p => (
+ <option key={p.id} value={p.id}>{p.icon} {p.name}</option>
+ ))}
+ </select>
+ <select
+ className="chat-select"
+ value={selectedModel}
+ onChange={(e) => setSelectedModel(e.target.value)}
+ >
+ {currentProvider.models.map(m => (
+ <option key={m.id} value={m.id}>
+ {m.name} — {m.inputPrice !== undefined ? `$${m.inputPrice}/M` : 'free'}
+ </option>
+ ))}
+ </select>
+ </div>
+
+ {/* Messages */}
+ <div className="chat-messages">
+ {messages.length === 0 && (
+ <div className="chat-empty">Envoyez un message pour commencer une conversation</div>
+ )}
+ {messages.map((msg, i) => (
+ <div key={i} className={`chat-msg chat-msg-${msg.role}`}>
+ <div className="chat-msg-header">
+ <span className="chat-msg-role">{msg.role === 'user' ? '👤 Vous' : `🤖 ${msg.provider || 'Assistant'}`}</span>
+ {msg.model && <span className="chat-msg-model">{msg.model}</span>}
+ {msg.costEstimate !== undefined && msg.costEstimate > 0 && (
+ <span className="chat-msg-cost">~${msg.costEstimate.toFixed(6)}</span>
+ )}
+ </div>
+ <div className="chat-msg-content">{msg.content}</div>
+ </div>
+ ))}
+ {loading && <div className="chat-loading">⏳ Réponse en cours...</div>}
+ {error && <div className="chat-error">❌ {error}</div>}
+ </div>
+
+ {/* Input */}
+ <div className="chat-input-row">
+ <input
+ className="chat-input"
+ placeholder="Écrivez votre message..."
+ value={input}
+ onChange={(e) => setInput(e.target.value)}
+ onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
+ disabled={loading}
+ />
+ <button
+ className="chat-send-btn"
+ onClick={handleSend}
+ disabled={!input.trim() || loading}
+ >
+ {loading ? '...' : '➤'}
+ </button>
+ </div>
+ </div>
+ );
+}
+
 // --- Main App ---
 
 export default function App() {
@@ -408,6 +570,7 @@ export default function App() {
 
  const tabs: { id: Tab; label: string; icon: string }[] = [
  { id: 'dashboard', label: 'DASHBOARD', icon: '◈' },
+ { id: 'chat', label: 'CHAT', icon: '💬' },
  { id: 'agents', label: 'AGENTS & MODÈLES', icon: '🤖' },
  { id: 'settings', label: 'API KEYS', icon: '🔑' },
  { id: 'memory', label: 'MÉMOIRE', icon: '🧠' },
@@ -443,6 +606,7 @@ export default function App() {
  {/* Main content area */}
  <main className="hud-main">
  {activeTab === 'dashboard' && <DashboardView statuses={providerStatuses} />}
+ {activeTab === 'chat' && <ChatPanel />}
  {activeTab === 'agents' && <AgentsDetailView />}
  {activeTab === 'settings' && <SettingsPanel />}
  {activeTab === 'memory' && <MemoryView />}
