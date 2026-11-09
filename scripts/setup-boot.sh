@@ -12,9 +12,11 @@ echo "🔧 Setting up Jarvis boot services..."
 mkdir -p "$SYSTEMD_DIR"
 
 # 2. Copy service files
-for svc in jarvis-stt jarvis-tts jarvis-core jarvis-memory jarvis-connectors; do
+for svc in jarvis-stt jarvis-tts jarvis-core jarvis-memory jarvis-connectors jarvis-agent-sessions jarvis-pc-actions; do
+ if [ -f "$PROJECT_ROOT/systemd/${svc}.service" ]; then
  cp "$PROJECT_ROOT/systemd/${svc}.service" "$SYSTEMD_DIR/"
  echo " ✅ Installed ${svc}.service"
+ fi
 done
 
 # 3. Reload systemd user daemon
@@ -22,9 +24,11 @@ systemctl --user daemon-reload
 echo "✅ Systemd user daemon reloaded"
 
 # 4. Enable services (start at login)
-for svc in jarvis-stt jarvis-tts jarvis-memory jarvis-core jarvis-connectors; do
+for svc in jarvis-stt jarvis-tts jarvis-memory jarvis-core jarvis-connectors jarvis-agent-sessions jarvis-pc-actions; do
+ if [ -f "$SYSTEMD_DIR/${svc}.service" ]; then
  systemctl --user enable "${svc}.service"
  echo " ✅ Enabled ${svc}"
+ fi
 done
 
 # 5. Enable lingering (services start at boot, not just login)

@@ -534,6 +534,148 @@ body {
  text-align: center;
 }
 
+/* === SESSIONS PANEL === */
+.sessions-panel {
+ display: flex;
+ flex-direction: column;
+ gap: 12px;
+}
+
+.sessions-status-bar {
+ display: flex;
+ align-items: center;
+ gap: 16px;
+ padding: 8px 14px;
+ background: var(--hud-panel);
+ border: 1px solid var(--hud-border);
+ font-size: 11px;
+ flex-wrap: wrap;
+}
+
+.sessions-conn { font-weight: bold; }
+.conn-ok { color: var(--hud-green); }
+.conn-err { color: var(--hud-red); }
+
+.sessions-relay {
+ color: var(--hud-amber);
+ opacity: 0.9;
+}
+
+.sessions-count {
+ margin-left: auto;
+ opacity: 0.7;
+ letter-spacing: 1px;
+ text-transform: uppercase;
+}
+
+.sessions-grid {
+ display: grid;
+ grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+ gap: 10px;
+}
+
+.sessions-empty {
+ grid-column: 1 / -1;
+ opacity: 0.4;
+ font-size: 12px;
+ font-style: italic;
+ text-align: center;
+ padding: 40px 0;
+}
+
+.session-card {
+ background: var(--hud-panel);
+ border: 1px solid var(--hud-border);
+ border-left: 3px solid var(--agent-color, #666);
+ padding: 12px 14px;
+ transition: all 0.2s ease;
+}
+
+.session-card:hover {
+ border-color: var(--agent-color, #666);
+ box-shadow: 0 0 12px rgba(0, 240, 255, 0.08);
+}
+
+.session-card-header {
+ display: flex;
+ align-items: center;
+ gap: 8px;
+ margin-bottom: 10px;
+}
+
+.session-icon { font-size: 18px; }
+
+.session-agent-name {
+ font-size: 13px;
+ font-weight: bold;
+ flex: 1;
+}
+
+.session-status-badge {
+ font-size: 9px;
+ padding: 2px 8px;
+ border-radius: 2px;
+ text-transform: uppercase;
+ letter-spacing: 0.5px;
+}
+
+.status-active {
+ background: rgba(0, 255, 136, 0.15);
+ color: var(--hud-green);
+ border: 1px solid rgba(0, 255, 136, 0.3);
+}
+
+.status-idle {
+ background: rgba(255, 184, 0, 0.1);
+ color: var(--hud-amber);
+ border: 1px solid rgba(255, 184, 0, 0.3);
+}
+
+.status-stopped {
+ background: rgba(255, 51, 51, 0.1);
+ color: var(--hud-red);
+ border: 1px solid rgba(255, 51, 51, 0.3);
+ opacity: 0.6;
+}
+
+.session-details {
+ display: flex;
+ flex-direction: column;
+ gap: 4px;
+}
+
+.session-detail {
+ display: flex;
+ align-items: center;
+ gap: 8px;
+ font-size: 11px;
+}
+
+.detail-label {
+ opacity: 0.5;
+ min-width: 55px;
+ text-transform: uppercase;
+ letter-spacing: 0.5px;
+}
+
+.detail-value { opacity: 0.85; }
+.detail-proxy { color: var(--hud-amber); font-size: 10px; }
+
+.sessions-summary {
+ display: flex;
+ gap: 8px;
+ flex-wrap: wrap;
+ margin-top: 4px;
+}
+
+.summary-chip {
+ font-size: 11px;
+ padding: 4px 12px;
+ border: 1px solid;
+ border-radius: 2px;
+ opacity: 0.8;
+}
+
 /* === CHAT PANEL === */
 .chat-panel {
  display: flex;

@@ -3,7 +3,26 @@ import './App.css';
 
 // --- Types ---
 
-type Tab = 'dashboard' | 'chat' | 'agents' | 'settings' | 'memory';
+type Tab = 'dashboard' | 'chat' | 'agents' | 'sessions' | 'settings' | 'memory';
+
+interface AgentSessionInfo {
+ agent_type: string;
+ session_id: string;
+ status: string;
+ pid?: number;
+ model?: string;
+ proxy_url?: string;
+ started_at?: string;
+ project_path?: string;
+}
+
+interface SessionsData {
+ sessions: AgentSessionInfo[];
+ total_active: number;
+ by_agent: Record<string, number>;
+ proxy_relay: { pid: number; url: string; upstream: string; status: string } | null;
+ scanned_at: string;
+}
 
 interface ProviderDef {
  id: string;
@@ -378,6 +397,145 @@ function MemoryView() {
  );
 }
 
+// --- Sessions Panel (real-time agent session discovery) ---
+
+const AGENT_COLORS: Record<string, string> = {
+ claude: '#d97706',
+ codex: '#10b981',
+ kimi: '#8b5cf6',
+ zai: '#06b6d4',
+};
+
+const AGENT_ICONS: Record<string, string> = {
+ claude: '🟠',
+ codex: '🟢',
+ kimi: '🟣',
+ zai: '🩵',
+};
+
+function SessionsPanel() {
+ const [data, setData] = useState<SessionsData | null>(null);
+ const [connected, setConnected] = useState(false);
+ const [error, setError] = useState<string | null>(null);
+
+ useEffect(() => {
+ let abortController: AbortController | null = null;
+
+ async function connectSSE() {
+ try {
+ abortController = new AbortController();
+ const resp = await fetch('http://localhost:8007/sessions/stream', {
+ signal: abortController.signal,
+ });
+ if (!resp.ok || !resp.body) {
+ throw new Error(`SSE connection failed: HTTP ${resp.status}`);
+ }
+
+ setConnected(true);
+ setError(null);
+ const reader = resp.body.getReader();
+ const decoder = new TextDecoder();
+ let buffer = '';
+
+ while (true) {
+ const { done, value } = await reader.read();
+ if (done) break;
+
+ buffer += decoder.decode(value, { stream: true });
+ const lines = buffer.split('\n');
+ buffer = lines.pop() || '';
+
+ for (const line of lines) {
+ if (!line.startsWith('data: ')) continue;
+ const jsonStr = line.slice(6).trim();
+ if (!jsonStr) continue;
+ try {
+ const parsed = JSON.parse(jsonStr);
+ if (parsed.error) {
+ setError(parsed.error);
+ } else {
+ setData(parsed);
+ setError(null);
+ }
+ } catch { /* skip malformed */ }
+ }
+ }
+ } catch (exc) {
+ if (exc instanceof Error && exc.name !== 'AbortError') {
+ setError(exc.message);
+ setConnected(false);
+ // Retry after 5s
+ setTimeout(connectSSE, 5000);
+ }
+ }
+ }
+
+ connectSSE();
+ return () => { abortController?.abort(); };
+ }, []);
+
+ return (
+ <div className="sessions-panel">
+ <h3 className="panel-title">SESSIONS AGENTS EN TEMPS RÉEL</h3>
+
+ {/* Connection status + proxy relay */}
+ <div className="sessions-status-bar">
+ <span className={`sessions-conn ${connected ? 'conn-ok' : 'conn-err'}`}>
+ {connected ? '● Connecté SSE' : '○ Déconnecté'}
+ </span>
+ {data?.proxy_relay && (
+ <span className="sessions-relay">
+ 🔗 Relay ghostcli actif (PID {data.proxy_relay.pid}) → {data.proxy_relay.upstream}
+ </span>
+ )}
+ {data && (
+ <span className="sessions-count">{data.total_active} session{data.total_active !== 1 ? 's' : ''} active{data.total_active !== 1 ? 's' : ''}</span>
+ )}
+ </div>
+
+ {error && <div className="chat-error">❌ {error}</div>}
+
+ {/* Session cards */}
+ <div className="sessions-grid">
+ {!data || data.sessions.length === 0 ? (
+ <div className="sessions-empty">Aucune session agent détectée. Lancez Claude, Codex, Kimi ou ZAI pour les voir apparaître ici.</div>
+ ) : (
+ data.sessions.map((session) => (
+ <div
+ key={session.session_id}
+ className="session-card"
+ style={{ '--agent-color': AGENT_COLORS[session.agent_type] || '#666' } as React.CSSProperties}
+ >
+ <div className="session-card-header">
+ <span className="session-icon">{AGENT_ICONS[session.agent_type] || '⚪'}</span>
+ <span className="session-agent-name">{session.agent_type.toUpperCase()}</span>
+ <span className={`session-status-badge status-${session.status}`}>{session.status}</span>
+ </div>
+ <div className="session-details">
+ {session.pid && <div className="session-detail"><span className="detail-label">PID</span><span className="detail-value">{session.pid}</span></div>}
+ {session.model && <div className="session-detail"><span className="detail-label">Modèle</span><span className="detail-value">{session.model}</span></div>}
+ {session.proxy_url && <div className="session-detail"><span className="detail-label">Proxy</span><span className="detail-value detail-proxy">{session.proxy_url}</span></div>}
+ {session.started_at && <div className="session-detail"><span className="detail-label">Démarré</span><span className="detail-value">{new Date(session.started_at).toLocaleTimeString('fr-FR')}</span></div>}
+ </div>
+ </div>
+ ))
+ )}
+ </div>
+
+ {/* Agent counts summary */}
+ {data && (
+ <div className="sessions-summary">
+ {Object.entries(data.by_agent).map(([agent, count]) => (
+ <div key={agent} className="summary-chip" style={{ borderColor: AGENT_COLORS[agent] || '#666' }}>
+ {AGENT_ICONS[agent] || '⚪'} {agent}: {count}
+ </div>
+ ))}
+ </div>
+ )}
+ </div>
+ );
+}
+
 // --- Chat Panel ---
 
 interface ChatMessage {
@@ -651,6 +809,7 @@ export default function App() {
  const tabs: { id: Tab; label: string; icon: string }[] = [
  { id: 'dashboard', label: 'DASHBOARD', icon: '◈' },
  { id: 'chat', label: 'CHAT', icon: '💬' },
+ { id: 'sessions', label: 'SESSIONS', icon: '📡' },
  { id: 'agents', label: 'AGENTS & MODÈLES', icon: '🤖' },
  { id: 'settings', label: 'API KEYS', icon: '🔑' },
  { id: 'memory', label: 'MÉMOIRE', icon: '🧠' },
@@ -687,6 +846,7 @@ export default function App() {
  <main className="hud-main">
  {activeTab === 'dashboard' && <DashboardView statuses={providerStatuses} />}
  {activeTab === 'chat' && <ChatPanel />}
+ {activeTab === 'sessions' && <SessionsPanel />}
  {activeTab === 'agents' && <AgentsDetailView />}
  {activeTab === 'settings' && <SettingsPanel />}
  {activeTab === 'memory' && <MemoryView />}

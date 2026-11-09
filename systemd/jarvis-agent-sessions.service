@@ -1,0 +1,14 @@
+[Unit]
+Description=Jarvis Agent Sessions (real-time session discovery + proxy relay)
+After=network.target graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/projects/jarvis/services/agent-sessions
+ExecStart=%h/projects/jarvis/.venv/bin/python -m jarvis_agent_sessions.main
+Restart=on-failure
+RestartSec=5
+Environment=JARVIS_AGENT_SESSIONS_PORT=8007
+
+[Install]
+WantedBy=default.target
