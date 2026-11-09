@@ -1,72 +1,178 @@
-# 🤖 Jarvis — AI Personal Assistant
+# ◈ Jarvis — AI Personal Assistant
 
-Assistant IA personnel local avec interface HUD, voix locale (STT/TTS), orchestration multi-agents et mémoire globale partagée.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
+[![Node 22+](https://img.shields.io/badge/node-22+-green.svg)](https://nodejs.org/)
+[![Tauri v2](https://img.shields.io/badge/Tauri-v2-orange.svg)](https://tauri.app/)
 
-## Architecture
+Assistant IA personnel local avec interface HUD sci-fi, voix locale (STT/TTS), orchestration multi-agents, mémoire globale partagée et contrôle PC.
+
+## Features
+
+- **️ Voix 100% locale** : STT whisper.cpp (AVX2) + TTS Piper (~600 MB RAM combiné)
+- ** 8 providers LLM** : Claude, Codex/GPT, Gemini, Kimi, MiniMax, GLM/Zhipu, OpenRouter, Cheaper Inference
+- ** Catalogue modèles & tarifs** : affichage dynamique des prix $/M tokens input/output par modèle
+- ** Gestion API keys depuis l'UI** : ajout/suppression/masquage des clés, support OAuth pour Codex/Claude/Gemini
+- ** Mémoire globale persistante** : SQLite (faits structurés) + ChromaDB (recherche sémantique vectorielle)
+- **️ Contrôle PC** : capture d'écran, presse-papiers, notifications système, gestion fenêtres
+- ** Interface HUD sci-fi** : Tauri v2 transparent, orb animé, design spécifique par agent
+- **⚡ Démarrage au boot** : systemd user units + autostart desktop
+- ** Sécurité** : auth token, SSRF prevention, shell allowlist, filesystem sandbox
+
+## ️ Architecture
 
 ```
 jarvis/
 ├── apps/
-│   ├── ui/          # Tauri v2 + React 19 (HUD sci-fi)
-│   └── core/        # Python FastAPI orchestrateur
+│   ├── ui/              # Tauri v2 + React 19 (HUD interface)
+│   └── core/            # Python FastAPI — LLM router + orchestration (:8003)
 ├── services/
-│   ├── stt/         # whisper.cpp wrapper (STT local)
-│   ├── tts/         # Piper TTS wrapper (TTS local)
-│   ├── memory/      # SQLite + ChromaDB (mémoire persistante)
-│   └── connectors/  # Google Workspace, filesystem, shell
-├── scripts/         # Installation & utilitaires
-├── systemd/         # Units systemd user
-└── docs/            # Documentation
+│   ├── stt/             # whisper.cpp wrapper — STT local (:8001)
+│   ├── tts/             # Piper TTS wrapper — TTS local (:8002)
+│   ├── memory/          # SQLite + ChromaDB — mémoire persistante (:8004)
+│   ├── connectors/      # Google Workspace, filesystem, shell-safe (:8005)
+│   └── pc-actions/      # Screen capture, clipboard, notifications, windows (:8006)
+├── scripts/             # Installation & setup
+├── systemd/             # User units pour boot automatique
+└── data/                # Modèles IA, screenshots, mémoire
 ```
 
-## Stack Technique
+## Providers & Tarifs
 
-| Composant | Technologie | Raison |
-|-----------|-------------|--------|
-| UI Desktop | Tauri v2 + React 19 + Tailwind v4 | Fenêtre native ~15 MB RAM, transparent, hotkeys globales |
-| STT Local | whisper.cpp (AVX2) | Temps réel CPU, ~400 MB RAM, MIT |
-| TTS Local | Piper TTS | <100ms latence, voix FR, ~200 MB RAM, MIT |
-| Mémoire | SQLite + ChromaDB | Faits structurés + recherche sémantique, persistant |
-| Orchestration | LangGraph | Multi-agents stateful, fiabilité production |
-| Agents LLM | Claude / Codex / Gemini / Kimi / Ollama | Routage multi-provider, fallback local |
-| Monorepo | pnpm + Turbo | Workspaces isolés, build parallèle |
+| Provider | Auth | Modèles | Prix Input $/M | Tags |
+|----------|------|---------|----------------|------|
+| **Claude** | API Key | Opus 4, Sonnet 4, Haiku 3.5 | $0.80 – $15 | flagship, reasoning |
+| **Codex / GPT** | OAuth | o3, GPT-4o, Codex Mini | $0.15 – $2.50 | coding, balanced |
+| **Gemini** | OAuth | 2.5 Pro, 2.0 Flash, Flash Lite | $0.075 – $1.25 | 1M-context, cheap |
+| **Kimi** | API Key | K2, Moonshot 128K/8K | $0.20 – $0.80 | coding, long-context |
+| **MiniMax** | API Key | M1, ABAB7 | $0.10 – $0.55 | 1M-context, reasoning |
+| **GLM (Zhipu)** | API Key | GLM-4 Plus/Flash, CodeGeeX | Free – $0.70 | free, coding |
+| **OpenRouter** | API Key | Llama Sou o Claude Fable 5.1, modelo da Anthropic, operado pela GhostCLI. Como posso ajudar?3, DeepSeek R1 | $0.14 – $0.55 | open-source |
+| **Cheaper Inference** | API Key | Llama 3.3 70B, Qwen 2.5 | $0.03 – $0.04 | ultra-cheap |
 
-## Prérequis Système
+## Installation Rapide
+
+### Prérequis
 
 - **OS** : Linux (Zorin/Ubuntu/Fedora) ou macOS
 - **CPU** : x86_64 avec AVX2 (ou ARM64 NEON)
 - **RAM** : 16 GB minimum, 32 GB recommandé
-- **GPU** : Optionnel (CPU-only supporté pour STT/TTS)
 - **Dev tools** : Node.js 22+, Python 3.12+, Rust/Cargo, pnpm
+- **Optionnel** : `scrot` ou `xclip` pour PC actions
 
-## Installation Rapide
+### One-shot Install
 
 ```bash
-# 1. Cloner et installer
 cd ~/projects/jarvis
-pnpm install
-
-# 2. Installer les dépendances système
-./scripts/install.sh
-
-# 3. Démarrer en développement
-pnpm dev
-
-# 4. Configurer le boot automatique
-./scripts/setup-boot.sh
+bash scripts/install.sh      # ~5 min (compile whisper, download modèles, pip, pnpm)
+bash scripts/setup-boot.sh   # systemd units + autostart desktop
 ```
 
-## Phases de Développement
+### Manuel
 
-| Phase | Contenu | Statut |
-|-------|---------|--------|
-| 0 | Scaffold monorepo + config | ✅ Terminé |
-| 1 | Voix locale (STT/TTS) | 🔲 À faire |
-| 2 | Cerveau & mémoire | 🔲 À faire |
-| 3 | Interface HUD | 🔲 À faire |
-| 4 | Connecteurs work | 🔲 À faire |
-| 5 | Boot & daemon | 🔲 À faire |
+```bash
+# 1. Python venv + services
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e services/stt -e services/tts -e services/memory \
+            -e services/connectors -e services/pc-actions -e apps/core
+
+# 2. Binaires voix
+./services/stt/scripts/build_whisper.sh
+./services/stt/scripts/download_model.sh
+./services/tts/scripts/install_piper.sh
+./services/tts/scripts/download_voices.sh
+
+# 3. UI
+pnpm install
+cd apps/ui && pnpm tauri build
+
+# 4. Boot
+bash scripts/setup-boot.sh
+```
+
+## API Services
+
+| Service | Port | Endpoints clés |
+|---------|------|----------------|
+| STT | 8001 | `POST /transcribe`, `WS /transcribe-stream` |
+| TTS | 8002 | `POST /speak`, `GET /voices` |
+| Core (LLM) | 8003 | `POST /chat`, `GET /providers` |
+| Memory | 8004 | `POST /remember`, `POST /recall`, `DELETE /memories/{id}` |
+| Connectors | 8005 | `POST /shell/exec`, `POST /fs/read`, `GET /google/calendar` |
+| PC Actions | 8006 | `POST /screenshot`, `GET/POST /clipboard`, `POST /notify`, `GET /windows` |
+
+### Exemples
+
+```bash
+# Transcription vocale
+curl -X POST http://localhost:8001/transcribe \
+  -F "file=@audio.wav"
+
+# Synthèse vocale
+curl -X POST http://localhost:8002/speak \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Bonjour, je suis Jarvis."}' --output response.wav
+
+# Chat avec Claude
+curl -X POST http://localhost:8003/chat \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Quelle heure est-il ?"}], "provider": "anthropic"}'
+
+# Stocker une mémoire
+curl -X POST http://localhost:8004/remember \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id": "claude", "content": "Rony préfère les réponses concises", "tags": ["preference"]}'
+
+# Capture d'écran
+curl -X POST http://localhost:8006/screenshot
+
+# Notification desktop
+curl -X POST http://localhost:8006/notify \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Jarvis", "body": "Tâche terminée !"}'
+```
+
+## ⌨️ Raccourcis
+
+| Raccourci | Action |
+|-----------|--------|
+| `Ctrl+Space` | Focus / toggle fenêtre Jarvis |
+
+## Sécurité
+
+- **Auth token** : header `X-Jarvis-Token` sur tous les services sensibles (Memory, Connectors, PC Actions)
+- **Shell** : allowlist stricte — seules les commandes whitelistées sont exécutées via `create_subprocess_exec` (pas de shell)
+- **Filesystem** : lecture seule dans `~/Documents`, `~/Projects`, `~/Desktop` uniquement
+- **SSRF** : Ollama URL validée contre localhost-only allowlist au démarrage
+- **Clés API** : passées en headers (jamais en query params), masquables dans l'UI
+- **Resource limits** : taille audio max, clipboard max, timeout commandes shell
+
+## ️ Stack Technique
+
+| Composant | Technologie |
+|-----------|-------------|
+| UI Desktop | Tauri v2 + React 19 + Tailwind CSS v4 |
+| STT Local | whisper.cpp (C++, AVX2, MIT) |
+| TTS Local | Piper TTS (ONNX, MIT) |
+| Mémoire | SQLite + ChromaDB (all-MiniLM-L6-v2) |
+| LLM Router | FastAPI + httpx (8 providers) |
+| PC Actions | Pillow + xclip + wmctrl + notify-send |
+| Monorepo | pnpm + Turbo |
+| Backend | Python 3.12 + FastAPI |
+| Frontend | TypeScript 5.8 strict |
 
 ## Licence
 
-MIT
+[MIT](LICENSE) — Copyright © 2026 ronylicha
+
+## Contribuer
+
+Les contributions sont bienvenues ! Ouvrez une issue ou une PR.
+
+## Remerciements
+
+- [whisper.cpp](https://github.com/ggerganov/whisper.cpp) — STT local performant
+- [Piper TTS](https://github.com/rhasspy/piper) — TTS léger et rapide
+- [Tauri](https://tauri.app/) — Framework desktop natif léger
+- [ChromaDB](https://www.trychroma.com/) — Base vectorielle locale
+- [LangGraph](https://github.com/langchain-ai/langgraph) — Inspiration orchestration multi-agents

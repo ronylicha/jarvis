@@ -1,0 +1,15 @@
+[Unit]
+Description=Jarvis PC Actions (screen, clipboard, notifications, windows)
+After=network.target graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/projects/jarvis/services/pc-actions
+ExecStart=%h/projects/jarvis/.venv/bin/python -m jarvis_pc_actions.main
+Restart=on-failure
+RestartSec=5
+Environment=JARVIS_PC_ACTIONS_PORT=8006
+Environment=DISPLAY=:0
+
+[Install]
+WantedBy=default.target
