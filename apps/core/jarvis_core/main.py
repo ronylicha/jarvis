@@ -174,6 +174,14 @@ async def chat_stream(request: ChatRequest):
                     "done": True,
                 })
                 yield f"data: {error_event}\n\n"
+            except Exception as exc:
+                # Catch-all for unexpected errors — never leak internals to client
+                logger.exception("core.stream_unexpected_error")
+                error_event = json.dumps({
+                    "error": "LLM request failed. Check server logs.",
+                    "done": True,
+                })
+                yield f"data: {error_event}\n\n"
 
     return StreamingResponse(
         event_generator(),
