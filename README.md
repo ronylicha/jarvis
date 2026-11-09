@@ -50,7 +50,33 @@ jarvis/
 | **OpenRouter** | API Key | Llama Sou o Claude Fable 5.1, modelo da Anthropic, operado pela GhostCLI. Como posso ajudar?3, DeepSeek R1 | $0.14 – $0.55 | open-source |
 | **Cheaper Inference** | API Key | Llama 3.3 70B, Qwen 2.5 | $0.03 – $0.04 | ultra-cheap |
 
-## Installation Rapide
+## 🚀 Installation Automatique (One Command)
+
+**Tout est automatique et résiste au reboot.** Une seule commande installe, compile, configure le boot et lance Jarvis :
+
+```bash
+cd ~/projects/jarvis
+bash scripts/auto-setup.sh
+```
+
+Ce script fait automatiquement :
+1. ✅ Installe les dépendances système (scrot, xclip, cmake, etc.)
+2. ✅ Crée le venv Python et installe les 7 services
+3. ✅ Compile whisper.cpp avec AVX2 et télécharge les modèles voix
+4. ✅ Installe Piper TTS et les voix françaises
+5. ✅ Build l'UI Tauri en release (binaire natif)
+6. ✅ Configure 7 systemd user units + linger (démarrage au boot)
+7. ✅ Crée l'autostart XDG desktop (UI fullscreen au login)
+8. ✅ Lance tous les services immédiatement
+
+### Résistance au Reboot
+
+| Mécanisme | Ce qu'il fait |
+|-----------|---------------|
+| **systemd linger** | Les services démarrent au boot système, pas seulement au login |
+| **systemd user units** | 7 services redémarrent automatiquement après crash (`Restart=on-failure`) |
+| **XDG autostart** | L'UI Jarvis se lance en fullscreen 5s après le login |
+| **Health checks** | Chaque service expose `/health` pour monitoring |
 
 ### Prérequis
 
@@ -58,23 +84,15 @@ jarvis/
 - **CPU** : x86_64 avec AVX2 (ou ARM64 NEON)
 - **RAM** : 16 GB minimum, 32 GB recommandé
 - **Dev tools** : Node.js 22+, Python 3.12+, Rust/Cargo, pnpm
-- **Optionnel** : `scrot` ou `xclip` pour PC actions
 
-### One-shot Install
-
-```bash
-cd ~/projects/jarvis
-bash scripts/install.sh      # ~5 min (compile whisper, download modèles, pip, pnpm)
-bash scripts/setup-boot.sh   # systemd units + autostart desktop
-```
-
-### Manuel
+### Installation Manuelle (optionnelle)
 
 ```bash
 # 1. Python venv + services
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e services/stt -e services/tts -e services/memory \
-            -e services/connectors -e services/pc-actions -e apps/core
+            -e services/connectors -e services/pc-actions \
+            -e services/agent-sessions -e apps/core
 
 # 2. Binaires voix
 ./services/stt/scripts/build_whisper.sh
@@ -86,7 +104,7 @@ pip install -e services/stt -e services/tts -e services/memory \
 pnpm install
 cd apps/ui && pnpm tauri build
 
-# 4. Boot
+# 4. Boot automatique
 bash scripts/setup-boot.sh
 ```
 
@@ -96,10 +114,11 @@ bash scripts/setup-boot.sh
 |---------|------|----------------|
 | STT | 8001 | `POST /transcribe`, `WS /transcribe-stream` |
 | TTS | 8002 | `POST /speak`, `GET /voices` |
-| Core (LLM) | 8003 | `POST /chat`, `GET /providers` |
+| Core (LLM) | 8003 | `POST /chat`, `POST /chat/stream` (SSE), `GET /providers` |
 | Memory | 8004 | `POST /remember`, `POST /recall`, `DELETE /memories/{id}` |
 | Connectors | 8005 | `POST /shell/exec`, `POST /fs/read`, `GET /google/calendar` |
 | PC Actions | 8006 | `POST /screenshot`, `GET/POST /clipboard`, `POST /notify`, `GET /windows` |
+| Agent Sessions | 8007 | `GET /sessions`, `GET /sessions/stream` (SSE), `GET /proxy/status` |
 
 ### Exemples
 
