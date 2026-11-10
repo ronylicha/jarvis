@@ -466,6 +466,41 @@ function ChatPanel({ welcomeMessage }: { welcomeMessage?: string }) {
  }
  return hist;
  });
+
+ // Speak welcome message aloud via TTS service on first load
+ useEffect(() => {
+ if (!welcomeMessage) return;
+ const spokenKey = 'jarvis_welcome_spoken';
+ if (sessionStorage.getItem(spokenKey)) return;
+
+ async function speakWelcome() {
+ try {
+ const vs = localStorage.getItem('jarvis_voice_settings');
+ const voice = vs ? JSON.parse(vs).ttsVoice : 'fr_FR-siwis-medium';
+ const speed = vs ? JSON.parse(vs).voiceSpeed : 1.0;
+
+ const resp = await fetch('http://localhost:8002/speak', {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ text: welcomeMessage, voice, speed }),
+ });
+
+ if (resp.ok) {
+ const audioBlob = await resp.blob();
+ const audioUrl = URL.createObjectURL(audioBlob);
+ const audio = new Audio(audioUrl);
+ audio.play().catch(() => {}); // Ignore autoplay policy errors
+ sessionStorage.setItem(spokenKey, 'true');
+ }
+ } catch {
+ // TTS service may not be running yet — silent fallback
+ }
+ }
+
+ // Small delay to ensure UI is rendered before speaking
+ const timer = setTimeout(speakWelcome, 1500);
+ return () => clearTimeout(timer);
+ }, [welcomeMessage]);
  const [input, setInput] = useState('');
  const [selectedProvider, setSelectedProvider] = useState('');
  const [selectedModel, setSelectedModel] = useState('');
