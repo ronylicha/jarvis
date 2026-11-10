@@ -150,7 +150,12 @@ function OnboardingWizard({ onComplete }: { onComplete: (data: OnboardingData) =
  case 'welcome': return userName.trim().length > 0;
  case 'language': return true; // locale always has default
  case 'voice': return sttLang !== '' && ttsVoice !== '';
- case 'provider': return apiKey.trim().length > 0 || selectedProvider === 'ollama';
+ case 'provider': {
+ // OAuth providers (Claude, Gemini) don't require pasting a key — user gets it via OAuth link
+ const meta = PROVIDER_META.find(p => p.id === selectedProvider);
+ if (meta?.authType === 'oauth') return true;
+ return apiKey.trim().length > 0 || selectedProvider === 'ollama';
+ }
  default: return false;
  }
  };

@@ -363,14 +363,15 @@ class LLMRouter:
         if not settings.moonshot_api_key:
             raise LLMRouterError("MOONSHOT_API_KEY not configured")
 
+        # Use international endpoint (not .cn) for global accessibility
         resp = await self._client.post(
-            "https://api.moonshot.cn/v1/chat/completions",
+            "https://api.kimi.com/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {settings.moonshot_api_key}",
                 "content-type": "application/json",
             },
             json={
-                "model": model or "moonshot-v1-8k",
+                "model": model or "kimi-k2",
                 "messages": messages,
                 "max_tokens": max_tokens,
                 "temperature": temperature,
@@ -439,9 +440,9 @@ class LLMRouter:
         if not settings.zhipu_api_key:
             raise LLMRouterError("ZHIPU_API_KEY not configured")
 
-        # Zhipu/GLM uses OpenAI-compatible API format
+        # Zhipu/GLM international endpoint (not .cn) — OpenAI-compatible format
         resp = await self._client.post(
-            "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+            "https://api.glm.ai/v4/chat/completions",
             headers={
                 "Authorization": f"Bearer {settings.zhipu_api_key}",
                 "content-type": "application/json",
