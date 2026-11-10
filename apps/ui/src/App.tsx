@@ -155,7 +155,7 @@ function OnboardingWizard({ onComplete }: { onComplete: (data: OnboardingData) =
  }
  };
 
- const handleNext = () => {
+ const handleNext = async () => {
  if (step < steps.length - 1) {
  setStep(step + 1);
  } else {

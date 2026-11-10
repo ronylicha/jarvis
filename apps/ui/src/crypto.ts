@@ -61,8 +61,9 @@ function toBase64(buffer: ArrayBuffer): string {
  return btoa(String.fromCharCode(...new Uint8Array(buffer)));
 }
 
-function fromBase64(str: string): Uint8Array {
- return Uint8Array.from(atob(str), c => c.charCodeAt(0));
+function fromBase64(str: string): ArrayBuffer {
+ const bytes = Uint8Array.from(atob(str), c => c.charCodeAt(0));
+ return bytes.buffer as ArrayBuffer;
 }
 
 export async function encryptValue(plaintext: string): Promise<string> {
