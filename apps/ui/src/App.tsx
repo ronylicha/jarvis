@@ -142,6 +142,7 @@ function OnboardingWizard({ onComplete }: { onComplete: (data: OnboardingData) =
  const [voiceSpeed, setVoiceSpeed] = useState(1.0);
  const [apiKey, setApiKey] = useState('');
  const [selectedProvider, setSelectedProvider] = useState('anthropic');
+ const [oauthStatus, setOauthStatus] = useState<string | null>(null);
 
  const steps = ['welcome', 'language', 'voice', 'provider'];
 
@@ -151,9 +152,9 @@ function OnboardingWizard({ onComplete }: { onComplete: (data: OnboardingData) =
  case 'language': return true; // locale always has default
  case 'voice': return sttLang !== '' && ttsVoice !== '';
  case 'provider': {
- // OAuth providers (Claude, Gemini) don't require pasting a key — user gets it via OAuth link
  const meta = PROVIDER_META.find(p => p.id === selectedProvider);
- if (meta?.authType === 'oauth') return true;
+ // OAuth providers require successful PKCE flow completion
+ if (meta?.authType === 'oauth') return oauthStatus === 'complete';
  return apiKey.trim().length > 0 || selectedProvider === 'ollama';
  }
  default: return false;
@@ -239,27 +240,67 @@ function OnboardingWizard({ onComplete }: { onComplete: (data: OnboardingData) =
  <div className="onboarding-step">
  <h2>{locale === 'fr' ? 'Premier provider IA' : 'First AI provider'}</h2>
  <p className="settings-note">{locale === 'fr' ? 'Choisissez au moins un provider pour commencer.' : 'Choose at least one provider to get started.'}</p>
- <select className="onboarding-select" value={selectedProvider} onChange={(e) => { setSelectedProvider(e.target.value); setApiKey(''); }}>
+ <select className="onboarding-select" value={selectedProvider} onChange={(e) => { setSelectedProvider(e.target.value); setApiKey(''); setOauthStatus(null); }}>
  {PROVIDER_META.map(p => <option key={p.id} value={p.id}>{p.icon} {p.name} ({p.authType === 'oauth' ? 'OAuth' : p.id === 'ollama' ? 'Local' : 'API Key'})</option>)}
  </select>
 
- {/* OAuth providers: auto-open browser + paste key field */}
- {currentProvider.authType === 'oauth' && currentProvider.oauthUrl && (
+ {/* OAuth providers: real PKCE flow via backend */}
+ {currentProvider.authType === 'oauth' && (
  <div className="oauth-flow">
+ {!oauthStatus && (
+ <>
+ <p className="settings-note">
+ {locale === 'fr'
+ ? `Cliquez ci-dessous pour lancer l'authentification OAuth sécurisée avec ${currentProvider.name}. Le navigateur s'ouvrira automatiquement.`
+ : `Click below to start secure OAuth authentication with ${currentProvider.name}. The browser will open automatically.`}
+ </p>
  <button
  className="oauth-launch-btn"
  style={{ borderColor: currentProvider.color, color: currentProvider.color }}
- onClick={() => window.open(currentProvider.oauthUrl!, '_blank')}
+ onClick={async () => {
+ try {
+ setOauthStatus('starting');
+ const resp = await fetch(`http://localhost:8003/oauth/start/${selectedProvider}`, { method: 'POST' });
+ if (!resp.ok) { const d = await resp.json().catch(() => ({})); setOauthStatus(`error:${d.detail || resp.status}`); return; }
+ const data = await resp.json();
+ window.open(data.authorize_url, '_blank');
+ setOauthStatus('waiting');
+ // Poll for completion
+ const pollInterval = setInterval(async () => {
+ try {
+ const statusResp = await fetch(`http://localhost:8003/oauth/status/${selectedProvider}`);
+ if (!statusResp.ok) return;
+ const statusData = await statusResp.json();
+ if (statusData.status === 'complete') {
+ clearInterval(pollInterval);
+ setOauthStatus('complete');
+ setApiKey('__oauth_authenticated__');
+ } else if (statusData.status === 'error') {
+ clearInterval(pollInterval);
+ setOauthStatus(`error:${statusData.error}`);
+ }
+ } catch {}
+ }, 2000);
+ // Auto-stop polling after 5 minutes
+ setTimeout(() => { clearInterval(pollInterval); if (oauthStatus === 'waiting') setOauthStatus('timeout'); }, 300000);
+ } catch (exc) {
+ setOauthStatus(`error:${exc instanceof Error ? exc.message : 'Network error'}`);
+ }
+ }}
+ disabled={oauthStatus === 'starting' || oauthStatus === 'waiting' || oauthStatus === 'complete'}
  >
- 🔗 {locale === 'fr' ? `Se connecter à ${currentProvider.name}` : `Connect to ${currentProvider.name}`}
+ {oauthStatus === 'starting' ? '⏳ Préparation...' : oauthStatus === 'waiting' ? '⏳ En attente d\'autorisation...' : oauthStatus === 'complete' ? '✅ Authentifié !' : `🔗 ${locale === 'fr' ? 'Se connecter à' : 'Connect to'} ${currentProvider.name}`}
  </button>
- <p className="settings-note" style={{ marginTop: 8 }}>
- {locale === 'fr'
- ? `Le navigateur s'ouvre vers la console ${currentProvider.name}. Créez ou copiez votre clé API, puis collez-la ci-dessous.`
- : `Browser opens to ${currentProvider.name} console. Create or copy your API key, then paste it below.`}
- </p>
- <label className="onboarding-label">{locale === 'fr' ? 'Collez votre clé API' : 'Paste your API key'}</label>
- <input className="onboarding-input" type="password" placeholder="sk-ant-... / AIza..." value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoFocus />
+ {oauthStatus?.startsWith('error:') && <div className="chat-error" style={{ marginTop: 8 }}>❌ {oauthStatus.replace('error:', '')}</div>}
+ {oauthStatus === 'timeout' && <div className="chat-error" style={{ marginTop: 8 }}>❌ {locale === 'fr' ? 'Délai dépassé. Réessayez.' : 'Timed out. Try again.'}</div>}
+ {oauthStatus === 'waiting' && <p className="settings-note" style={{ marginTop: 8 }}>{locale === 'fr' ? 'Autorisez l\'accès dans le navigateur ouvert...' : 'Authorize access in the opened browser...'}</p>}
+ </>
+ )}
+ {oauthStatus === 'complete' && (
+ <div style={{ marginTop: 12, padding: 12, border: '1px solid var(--hud-green)', background: 'rgba(0,255,136,0.05)' }}>
+ <p style={{ color: 'var(--hud-green)', fontSize: 13 }}>✅ {locale === 'fr' ? `${currentProvider.name} connecté avec succès via OAuth !` : `${currentProvider.name} successfully connected via OAuth!`}</p>
+ </div>
+ )}
  </div>
  )}
 
@@ -409,11 +450,47 @@ function SettingsPanel({ onKeysChanged }: { onKeysChanged?: () => void }) {
  {PROVIDER_META.map((p) => (
  <div key={p.id} className="key-row">
  <label className="key-label" style={{ color: p.color }}>{p.icon} {p.name}<span className="key-auth-badge">{p.authType}</span></label>
- <div className="key-input-row">
- <input type={showKey[p.id] ? 'text' : 'password'} className="key-input" placeholder={p.authType === 'oauth' ? 'OAuth / API key' : 'sk-...'} value={keys[p.id] || ''} onChange={(e) => setKeys(prev => ({ ...prev, [p.id]: e.target.value }))} />
- {p.authType === 'api_key' && <button className="key-toggle-btn" onClick={() => setShowKey(prev => ({ ...prev, [p.id]: !prev[p.id] }))}>{showKey[p.id] ? '🙈' : '👁️'}</button>}
- {p.authType === 'oauth' && p.oauthUrl && <a href={p.oauthUrl} target="_blank" rel="noopener noreferrer" className="key-oauth-btn" style={{ borderColor: p.color, color: p.color, textDecoration: 'none', display: 'flex', alignItems: 'center' }}>🔗 {t('settings.oauth_connect')}</a>}
+ {p.authType === 'oauth' ? (
+ <div className="oauth-flow">
+ <button
+ className="oauth-launch-btn"
+ style={{ borderColor: p.color, color: p.color }}
+ onClick={async () => {
+ try {
+ const resp = await fetch(`http://localhost:8003/oauth/start/${p.id}`, { method: 'POST' });
+ if (!resp.ok) { const d = await resp.json().catch(() => ({})); alert(d.detail || `HTTP ${resp.status}`); return; }
+ const data = await resp.json();
+ window.open(data.authorize_url, '_blank');
+ // Poll for completion
+ const pollInterval = setInterval(async () => {
+ try {
+ const statusResp = await fetch(`http://localhost:8003/oauth/status/${p.id}`);
+ if (!statusResp.ok) return;
+ const statusData = await statusResp.json();
+ if (statusData.status === 'complete') {
+ clearInterval(pollInterval);
+ setKeys(prev => ({ ...prev, [p.id]: '__oauth_authenticated__' }));
+ onKeysChanged?.();
+ } else if (statusData.status === 'error') {
+ clearInterval(pollInterval);
+ alert(`OAuth error: ${statusData.error}`);
+ }
+ } catch {}
+ }, 2000);
+ setTimeout(() => clearInterval(pollInterval), 300000);
+ } catch (exc) { alert(exc instanceof Error ? exc.message : 'Network error'); }
+ }}
+ >
+ 🔗 {t('settings.oauth_connect')} {p.name}
+ </button>
+ {keys[p.id] === '__oauth_authenticated__' && <span className="save-feedback" style={{ marginTop: 6 }}>✅ Authenticated</span>}
  </div>
+ ) : (
+ <div className="key-input-row">
+ <input type={showKey[p.id] ? 'text' : 'password'} className="key-input" placeholder="sk-..." value={keys[p.id] || ''} onChange={(e) => setKeys(prev => ({ ...prev, [p.id]: e.target.value }))} />
+ <button className="key-toggle-btn" onClick={() => setShowKey(prev => ({ ...prev, [p.id]: !prev[p.id] }))}>{showKey[p.id] ? '🙈' : '👁️'}</button>
+ </div>
+ )}
  </div>
  ))}
  </div>
