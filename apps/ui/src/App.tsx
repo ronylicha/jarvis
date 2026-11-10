@@ -91,7 +91,7 @@ interface OnboardingData {
 
 const PROVIDER_META: ProviderMeta[] = [
  { id: 'anthropic', name: 'Claude', color: '#d97706', icon: '🟠', authType: 'oauth', oauthUrl: 'https://console.anthropic.com/settings/keys' },
- { id: 'openai', name: 'OpenAI / Codex', color: '#10b981', icon: '🟢', authType: 'api_key' },
+ { id: 'openai', name: 'OpenAI / Codex', color: '#10b981', icon: '🟢', authType: 'oauth', oauthUrl: 'https://platform.openai.com/api-keys' },
  { id: 'google', name: 'Gemini', color: '#3b82f6', icon: '🔵', authType: 'oauth', oauthUrl: 'https://aistudio.google.com/apikey' },
  { id: 'moonshot', name: 'Kimi', color: '#8b5cf6', icon: '🟣', authType: 'api_key' },
  { id: 'minimax', name: 'MiniMax', color: '#ec4899', icon: '💗', authType: 'api_key' },
@@ -239,21 +239,45 @@ function OnboardingWizard({ onComplete }: { onComplete: (data: OnboardingData) =
  <div className="onboarding-step">
  <h2>{locale === 'fr' ? 'Premier provider IA' : 'First AI provider'}</h2>
  <p className="settings-note">{locale === 'fr' ? 'Choisissez au moins un provider pour commencer.' : 'Choose at least one provider to get started.'}</p>
- <select className="onboarding-select" value={selectedProvider} onChange={(e) => setSelectedProvider(e.target.value)}>
- {PROVIDER_META.map(p => <option key={p.id} value={p.id}>{p.icon} {p.name} ({p.authType})</option>)}
+ <select className="onboarding-select" value={selectedProvider} onChange={(e) => { setSelectedProvider(e.target.value); setApiKey(''); }}>
+ {PROVIDER_META.map(p => <option key={p.id} value={p.id}>{p.icon} {p.name} ({p.authType === 'oauth' ? 'OAuth' : p.id === 'ollama' ? 'Local' : 'API Key'})</option>)}
  </select>
+
+ {/* OAuth providers: auto-open browser + paste key field */}
  {currentProvider.authType === 'oauth' && currentProvider.oauthUrl && (
- <div style={{ marginTop: 8 }}>
- <a href={currentProvider.oauthUrl} target="_blank" rel="noopener noreferrer" className="key-oauth-btn" style={{ borderColor: currentProvider.color, color: currentProvider.color, display: 'inline-block', textDecoration: 'none', textAlign: 'center' }}>
- 🔗 {locale === 'fr' ? 'Obtenir une clé API' : 'Get API key'}
- </a>
+ <div className="oauth-flow">
+ <button
+ className="oauth-launch-btn"
+ style={{ borderColor: currentProvider.color, color: currentProvider.color }}
+ onClick={() => window.open(currentProvider.oauthUrl!, '_blank')}
+ >
+ 🔗 {locale === 'fr' ? `Se connecter à ${currentProvider.name}` : `Connect to ${currentProvider.name}`}
+ </button>
+ <p className="settings-note" style={{ marginTop: 8 }}>
+ {locale === 'fr'
+ ? `Le navigateur s'ouvre vers la console ${currentProvider.name}. Créez ou copiez votre clé API, puis collez-la ci-dessous.`
+ : `Browser opens to ${currentProvider.name} console. Create or copy your API key, then paste it below.`}
+ </p>
+ <label className="onboarding-label">{locale === 'fr' ? 'Collez votre clé API' : 'Paste your API key'}</label>
+ <input className="onboarding-input" type="password" placeholder="sk-ant-... / AIza..." value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoFocus />
  </div>
  )}
- <label className="onboarding-label" style={{ marginTop: 12 }}>
- {selectedProvider === 'ollama' ? (locale === 'fr' ? 'Ollama local (pas de clé requise)' : 'Local Ollama (no key needed)') : 'API Key'}
- </label>
- {selectedProvider !== 'ollama' && (
- <input className="onboarding-input" type="password" placeholder="sk-..." value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+
+ {/* API key providers: direct key input */}
+ {currentProvider.authType === 'api_key' && selectedProvider !== 'ollama' && (
+ <div>
+ <label className="onboarding-label" style={{ marginTop: 12 }}>API Key</label>
+ <input className="onboarding-input" type="password" placeholder="sk-..." value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoFocus />
+ </div>
+ )}
+
+ {/* Ollama: no key needed */}
+ {selectedProvider === 'ollama' && (
+ <div>
+ <p className="settings-note" style={{ marginTop: 12 }}>
+ {locale === 'fr' ? '🦙 Ollama tourne localement. Aucune clé API requise.' : '🦙 Ollama runs locally. No API key needed.'}
+ </p>
+ </div>
  )}
  </div>
  )}

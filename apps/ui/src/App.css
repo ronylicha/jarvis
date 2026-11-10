@@ -143,6 +143,34 @@
  cursor: not-allowed;
 }
 
+/* OAuth flow in onboarding */
+.oauth-flow {
+ margin-top: 12px;
+ padding: 16px;
+ border: 1px solid var(--hud-border);
+ background: rgba(0, 240, 255, 0.03);
+}
+
+.oauth-launch-btn {
+ width: 100%;
+ background: transparent;
+ border: 2px solid;
+ font-family: var(--font-mono);
+ font-size: 14px;
+ font-weight: bold;
+ padding: 14px 20px;
+ cursor: pointer;
+ transition: all 0.2s;
+ letter-spacing: 1px;
+ text-align: center;
+}
+
+.oauth-launch-btn:hover {
+ background: rgba(255, 255, 255, 0.05);
+ box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+ transform: translateY(-1px);
+}
+
 :root {
  --hud-cyan: #00f0ff;
  --hud-amber: #ffb800;
