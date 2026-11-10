@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import './App.css';
 import { t, setLocale, getLocale, initLocale, type Locale } from './i18n';
+import { encryptKeys, decryptKeys, encryptValue, decryptValue } from './crypto';
 
 // --- Types ---
 
@@ -169,10 +170,11 @@ function OnboardingWizard({ onComplete }: { onComplete: (data: OnboardingData) =
  };
  saveOnboarding(data);
  setLocale(locale);
- // Save API key
+ // Save API key (encrypted via AES-GCM)
  try {
- const keys = JSON.parse(localStorage.getItem('jarvis_api_keys') || '{}');
- keys[selectedProvider] = apiKey.trim();
+ const stored = localStorage.getItem('jarvis_api_keys');
+ const keys = stored ? JSON.parse(stored) : {};
+ keys[selectedProvider] = await encryptValue(apiKey.trim());
  localStorage.setItem('jarvis_api_keys', JSON.stringify(keys));
  } catch {}
  // Save voice settings
@@ -329,17 +331,25 @@ function SettingsPanel({ onKeysChanged }: { onKeysChanged?: () => void }) {
  const [voiceSpeed, setVoiceSpeed] = useState(1.0);
 
  useEffect(() => {
+ async function loadKeys() {
  try {
  const stored = localStorage.getItem('jarvis_api_keys');
- if (stored) setKeys(JSON.parse(stored));
+ if (stored) {
+ const encrypted = JSON.parse(stored);
+ const decrypted = await decryptKeys(encrypted);
+ setKeys(decrypted);
+ }
  const vs = localStorage.getItem('jarvis_voice_settings');
  if (vs) { const v = JSON.parse(vs); if (v.sttLang) setSttLang(v.sttLang); if (v.ttsVoice) setTtsVoice(v.ttsVoice); if (v.voiceSpeed) setVoiceSpeed(v.voiceSpeed); }
  } catch {}
+ }
+ loadKeys();
  }, []);
 
- const handleSave = useCallback(() => {
+ const handleSave = useCallback(async () => {
  try {
- localStorage.setItem('jarvis_api_keys', JSON.stringify(keys));
+ const encrypted = await encryptKeys(keys);
+ localStorage.setItem('jarvis_api_keys', JSON.stringify(encrypted));
  localStorage.setItem('jarvis_voice_settings', JSON.stringify({ sttLang, ttsVoice, voiceSpeed }));
  setSaved(t('settings.saved'));
  setTimeout(() => setSaved(null), 3000);
@@ -587,7 +597,14 @@ function SessionsPanel() {
  try {
  abortController = new AbortController();
  let headers: Record<string, string> = {};
- try { const k = JSON.parse(localStorage.getItem('jarvis_api_keys') || '{}'); if (k.agent_sessions_token) headers['X-Jarvis-Token'] = k.agent_sessions_token; } catch {}
+ try {
+ const stored = localStorage.getItem('jarvis_api_keys');
+ if (stored) {
+ const encrypted = JSON.parse(stored);
+ const decrypted = await decryptKeys(encrypted);
+ if (decrypted.agent_sessions_token) headers['X-Jarvis-Token'] = decrypted.agent_sessions_token;
+ }
+ } catch {}
  const resp = await fetch('http://localhost:8007/sessions/stream', { signal: abortController.signal, headers });
  if (!resp.ok || !resp.body) throw new Error(`SSE failed: HTTP ${resp.status}`);
  setConnected(true); setError(null);
