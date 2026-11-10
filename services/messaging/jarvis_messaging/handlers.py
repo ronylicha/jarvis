@@ -76,7 +76,11 @@ async def fetch_telegram_messages() -> list[IncomingMessage]:
 
 
 async def send_telegram_message(chat_id: str, text: str) -> bool:
-    """Send a message via Telegram Bot API."""
+    """Send a plain-text message via Telegram Bot API.
+
+    No parse_mode is used to avoid Markdown injection vulnerabilities.
+    Text is sent as-is without formatting interpretation by Telegram.
+    """
     if not settings.telegram_bot_token:
         return False
 
@@ -84,7 +88,7 @@ async def send_telegram_message(chat_id: str, text: str) -> bool:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
                 f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
-                json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"},
+                json={"chat_id": chat_id, "text": text},
             )
             resp.raise_for_status()
         logger.info("telegram.sent", chat_id=chat_id)

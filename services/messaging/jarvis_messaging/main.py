@@ -27,13 +27,24 @@ logger = structlog.get_logger(__name__)
 # --- Auth ---
 
 async def verify_token(x_jarvis_token: str = Header(default="")) -> str:
-    """Verify bearer token. Fail-closed when JARVIS_MESSAGING_API_TOKEN is set."""
-    expected = os.environ.get("JARVIS_MESSAGING_API_TOKEN")
-    if expected is None:
-        return "__anonymous__"
-    if not expected:
-        raise HTTPException(status_code=500, detail="Auth misconfigured")
-    if not x_jarvis_token or not hmac.compare_digest(x_jarvis_token, expected):
+    """Verify bearer token. Fail-closed: rejects when token unset or empty.
+
+    Set JARVIS_MESSAGING_API_TOKEN to enable the service.
+    Without it, every request returns 403 to prevent accidental exposure.
+    Empty string is treated as misconfiguration (500), not disabled auth.
+    """
+    raw = os.environ.get("JARVIS_MESSAGING_API_TOKEN")
+    if raw is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Messaging service requires JARVIS_MESSAGING_API_TOKEN to be set.",
+        )
+    if not raw:
+        raise HTTPException(
+            status_code=500,
+            detail="JARVIS_MESSAGING_API_TOKEN is set but empty. Fix configuration or unset the variable.",
+        )
+    if not x_jarvis_token or not hmac.compare_digest(x_jarvis_token, raw):
         raise HTTPException(status_code=403, detail="Invalid or missing token")
     return "__authenticated__"
 
