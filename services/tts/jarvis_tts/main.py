@@ -1,3 +1,4 @@
+import logging
 """Jarvis TTS FastAPI application."""
 
 from contextlib import asynccontextmanager
@@ -21,7 +22,7 @@ async def lifespan(app: FastAPI):
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.dev.ConsoleRenderer(),
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(logger.level),
+        wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
     )
     logger.info("tts.startup", port=settings.port, default_voice=settings.default_voice)
     yield

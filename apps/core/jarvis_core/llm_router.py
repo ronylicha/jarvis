@@ -132,18 +132,24 @@ class LLMRouter:
                 continue
 
             # Skip unconfigured providers during fallback
-            key_map = {
-                "anthropic": settings.anthropic_api_key,
-                "openai": settings.openai_api_key,
-                "google": settings.google_api_key,
-                "moonshot": settings.moonshot_api_key,
-                "minimax": settings.minimax_api_key,
-                "zhipu": settings.zhipu_api_key,
-                "openrouter": settings.openrouter_api_key,
-                "ollama": self._validated_ollama_url is not None,
-            }
-            if not key_map.get(attempt_prov):
-                continue
+            # Check provider availability (Ollama requires installed models)
+            if attempt_prov == "ollama":
+                if self._validated_ollama_url is None:
+                    continue
+                if not await self._ollama_has_models():
+                    continue
+            else:
+                key_map = {
+                    "anthropic": settings.anthropic_api_key,
+                    "openai": settings.openai_api_key,
+                    "google": settings.google_api_key,
+                    "moonshot": settings.moonshot_api_key,
+                    "minimax": settings.minimax_api_key,
+                    "zhipu": settings.zhipu_api_key,
+                    "openrouter": settings.openrouter_api_key,
+                }
+                if not key_map.get(attempt_prov):
+                    continue
 
             # Validate model only for the explicitly requested provider
             if attempt_prov == prov and model is not None and prov in _MODEL_ALLOWLISTS:
@@ -634,8 +640,24 @@ class LLMRouter:
         logger.info("llm.models_fetched", provider=provider, count=len(models))
         return models
 
-    def get_available_providers(self) -> list[dict[str, Any]]:
-        """Return list of configured providers with their status."""
+    async def _ollama_has_models(self) -> bool:
+        """Check if Ollama has at least one model pulled (not just installed)."""
+        if self._validated_ollama_url is None:
+            return False
+        try:
+            resp = await self._client.get(f"{self._validated_ollama_url}/api/tags")
+            resp.raise_for_status()
+            data = resp.json()
+            return len(data.get("models", [])) > 0
+        except Exception:
+            return False
+
+    async def get_available_providers(self) -> list[dict[str, Any]]:
+        """Return list of configured providers with their status.
+
+        Ollama is only marked configured if URL is valid AND models are pulled.
+        """
+        ollama_configured = await self._ollama_has_models()
         key_map = {
             "anthropic": settings.anthropic_api_key,
             "openai": settings.openai_api_key,
@@ -644,7 +666,7 @@ class LLMRouter:
             "minimax": settings.minimax_api_key,
             "zhipu": settings.zhipu_api_key,
             "openrouter": settings.openrouter_api_key,
-            "ollama": self._validated_ollama_url is not None,
+            "ollama": ollama_configured,
         }
         return [
             {

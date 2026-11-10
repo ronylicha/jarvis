@@ -1,3 +1,4 @@
+import logging
 """Jarvis Memory FastAPI application."""
 
 import hashlib
@@ -55,7 +56,7 @@ async def lifespan(app: FastAPI):
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.dev.ConsoleRenderer(),
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(logger.level),
+        wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
     )
     auth_mode = "disabled" if _expected_token() is None else "enabled"
     logger.info("memory.startup", port=settings.port, auth=auth_mode)

@@ -1,3 +1,4 @@
+import logging
 """Jarvis Connectors FastAPI application."""
 
 import asyncio
@@ -37,7 +38,7 @@ async def lifespan(app: FastAPI):
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.dev.ConsoleRenderer(),
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(logger.level),
+        wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
     )
     logger.info("connectors.startup", port=settings.port)
     yield

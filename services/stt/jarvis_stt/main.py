@@ -1,3 +1,4 @@
+import logging
 """Jarvis STT FastAPI application."""
 
 import json
@@ -21,7 +22,7 @@ async def lifespan(app: FastAPI):
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.dev.ConsoleRenderer(),
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(logger.level),
+        wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
     )
     logger.info("stt.startup", port=settings.port, model=str(settings.model_path_abs))
     yield

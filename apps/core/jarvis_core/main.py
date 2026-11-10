@@ -1,3 +1,4 @@
+import logging
 """Jarvis Core FastAPI application — LLM router + orchestration hub."""
 
 import asyncio
@@ -52,7 +53,7 @@ async def lifespan(app: FastAPI):
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.dev.ConsoleRenderer(),
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(logger.level),
+        wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
     )
     auth_mode = "disabled" if os.environ.get("JARVIS_CORE_API_TOKEN") is None else "enabled"
     logger.info("core.startup", port=settings.port, default_provider=settings.default_provider, auth=auth_mode)
@@ -81,7 +82,7 @@ class ChatRequest(BaseModel):
 @app.get("/health")
 async def health():
     """Health check with provider status."""
-    providers = router.get_available_providers()
+    providers = await router.get_available_providers()
     configured_count = sum(1 for p in providers if p["configured"])
     return {
         "status": "ok" if configured_count > 0 else "degraded",
@@ -95,7 +96,7 @@ async def health():
 @app.get("/providers")
 async def list_providers():
     """List available LLM providers and their configuration status."""
-    return {"providers": router.get_available_providers()}
+    return {"providers": await router.get_available_providers()}
 
 
 @app.get("/models/refresh", dependencies=[Depends(verify_chat_token)])

@@ -1,3 +1,4 @@
+import logging
 """Jarvis PC Actions FastAPI application."""
 
 import hmac
@@ -49,7 +50,7 @@ async def lifespan(app: FastAPI):
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.dev.ConsoleRenderer(),
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(logger.level),
+        wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
     )
     logger.info("pc_actions.startup", port=settings.port)
     yield

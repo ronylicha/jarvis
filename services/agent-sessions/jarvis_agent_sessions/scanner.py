@@ -41,8 +41,15 @@ def _find_claude_processes() -> list[dict[str, Any]]:
             cmdline_str = " ".join(cmdline)
             if "claude" not in cmdline_str.lower():
                 continue
-            # Skip non-agent processes (grep, wrapper scripts)
-            if any(skip in cmdline_str for skip in ["grep", "wrap-", "setup-boot"]):
+            # Skip non-agent processes that happen to contain "claude" in their path/name
+            if any(skip in cmdline_str for skip in [
+                "grep", "wrap-", "setup-boot", "earlyoom",
+                "chrome-native-host", "claudenest-agent", "chrome-extension",
+                "notebooklm-mcp", "developer-kit-tools",
+            ]):
+                continue
+            # Must be an actual claude CLI process (binary named "claude" in argv[0])
+            if cmdline and "claude" not in cmdline[0].lower().split("/")[-1]:
                 continue
 
             pid = proc.info["pid"]
