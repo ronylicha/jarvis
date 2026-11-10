@@ -171,6 +171,63 @@
  transform: translateY(-1px);
 }
 
+/* CLI Agent cards in onboarding */
+.cli-agents-list {
+ display: flex;
+ flex-direction: column;
+ gap: 8px;
+ max-height: 320px;
+ overflow-y: auto;
+}
+
+.cli-agent-card {
+ background: var(--hud-panel);
+ border: 1px solid var(--hud-border);
+ border-left: 3px solid var(--agent-color, #666);
+ padding: 12px 14px;
+ cursor: pointer;
+ transition: all 0.2s ease;
+}
+
+.cli-agent-card:hover {
+ border-color: var(--agent-color, #666);
+ background: rgba(0, 240, 255, 0.03);
+}
+
+.cli-agent-card.selected {
+ border-color: var(--hud-green);
+ background: rgba(0, 255, 136, 0.05);
+ box-shadow: 0 0 10px rgba(0, 255, 136, 0.15);
+}
+
+.cli-agent-card.unauthenticated {
+ opacity: 0.6;
+ cursor: default;
+}
+
+.cli-agent-header {
+ display: flex;
+ align-items: center;
+ gap: 8px;
+ margin-bottom: 6px;
+}
+
+.cli-agent-icon { font-size: 16px; }
+.cli-agent-name { font-size: 13px; font-weight: bold; flex: 1; }
+.cli-agent-cmd { font-size: 10px; opacity: 0.5; font-family: var(--font-mono); }
+
+.cli-agent-details {
+ display: flex;
+ gap: 10px;
+ flex-wrap: wrap;
+ font-size: 10px;
+}
+
+.cli-agent-model { color: var(--hud-amber); }
+.cli-agent-sessions { opacity: 0.7; }
+.cli-agent-auth.auth-ok { color: var(--hud-green); }
+.cli-agent-auth.auth-no { color: var(--hud-red); opacity: 0.7; }
+
 :root {
  --hud-cyan: #00f0ff;
  --hud-amber: #ffb800;

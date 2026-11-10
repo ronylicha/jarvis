@@ -16,14 +16,7 @@ from pydantic import BaseModel, Field
 
 from jarvis_core.config import settings
 from jarvis_core.llm_router import LLMResponse, LLMRouter, LLMRouterError
-from jarvis_core.oauth_flow import (
-    OAUTH_PROVIDERS,
-    check_oauth_flow_status,
-    get_provider_status,
-    register_client_secrets,
-    revoke_tokens,
-    start_oauth_flow,
-)
+from jarvis_core.cli_agents import detect_all_agents, get_agents_summary
 
 logger = structlog.get_logger(__name__)
 
@@ -229,78 +222,39 @@ async def chat_stream(request: ChatRequest):
 # --- OAuth Endpoints ---
 
 
-class RegisterClientRequest(BaseModel):
-    provider: str = Field(..., pattern="^(anthropic|google|openai)$")
-    client_id: str = Field(..., min_length=1)
-    client_secret: str = Field(default="")
+# --- CLI Agent Detection Endpoints ---
 
+@app.get("/cli-agents", dependencies=[Depends(verify_chat_token)])
+async def cli_agents():
+    """Detect installed CLI agents and their authentication status.
 
-@app.get("/oauth/providers", dependencies=[Depends(verify_chat_token)])
-async def oauth_providers():
-    """List all OAuth providers with their current status."""
-    return {"providers": get_provider_status()}
-
-
-@app.post("/oauth/register-client", dependencies=[Depends(verify_chat_token)])
-async def oauth_register_client(request: RegisterClientRequest):
-    """Register OAuth client credentials for a provider.
-
-    Required before starting an OAuth flow. Obtain client_id from the
-    provider's developer console (Anthropic Console, Google Cloud Console, etc.).
+    Reads native config files from each CLI tool — no OAuth flow needed.
+    Each CLI manages its own authentication independently.
     """
-    try:
-        secrets = register_client_secrets(
-            request.provider,
-            request.client_id,
-            request.client_secret,
-        )
-        return {
-            "status": "registered",
-            "provider": request.provider,
-            "client_id": secrets.client_id[:8] + "...",
-        }
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    return get_agents_summary()
 
 
-@app.post("/oauth/start/{provider}", dependencies=[Depends(verify_chat_token)])
-async def oauth_start(provider: str):
-    """Start an OAuth 2.0 + PKCE authorization flow.
-
-    Returns an authorize_url to open in the browser and a port where
-    the local callback server is listening for the authorization code.
-    The frontend should poll /oauth/status/{provider} until complete.
-    """
-    if provider not in OAUTH_PROVIDERS:
-        raise HTTPException(status_code=400, detail=f"Unknown OAuth provider: {provider}")
-    try:
-        info = start_oauth_flow(provider)
-        return info
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-
-@app.get("/oauth/status/{provider}", dependencies=[Depends(verify_chat_token)])
-async def oauth_status(provider: str):
-    """Check the status of an in-flight OAuth flow.
-
-    Returns:
-    - waiting: callback server running, no code received yet
-    - complete: tokens acquired and stored
-    - error: something went wrong
-    - not_started: no flow in progress
-    """
-    result = await check_oauth_flow_status(provider)
-    return result
-
-
-@app.post("/oauth/revoke/{provider}", dependencies=[Depends(verify_chat_token)])
-async def oauth_revoke(provider: str):
-    """Revoke (delete) stored OAuth tokens for a provider."""
-    revoked = revoke_tokens(provider)
-    if not revoked:
-        raise HTTPException(status_code=404, detail=f"No tokens found for {provider}")
-    return {"status": "revoked", "provider": provider}
+@app.get("/cli-agents/detailed", dependencies=[Depends(verify_chat_token)])
+async def cli_agents_detailed():
+    """Return detailed info for each detected CLI agent."""
+    agents = detect_all_agents()
+    return {
+        "agents": [
+            {
+                "name": a.name,
+                "cli_command": a.cli_command,
+                "auth_type": a.auth_type,
+                "is_installed": a.is_installed,
+                "is_authenticated": a.is_authenticated,
+                "model": a.model,
+                "config_path": a.config_path,
+                "session_count": a.session_count,
+                "latest_session": a.latest_session,
+                "metadata": a.metadata,
+            }
+            for a in agents
+        ]
+    }
 
 
 if __name__ == "__main__":

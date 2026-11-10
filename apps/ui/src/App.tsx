@@ -69,6 +69,18 @@ interface ChatMessage {
  timestamp: number;
 }
 
+interface CLIAgentInfo {
+ name: string;
+ cli_command: string;
+ auth_type: string;
+ is_installed: boolean;
+ is_authenticated: boolean;
+ model: string | null;
+ session_count: number;
+ latest_session: string | null;
+ metadata: Record<string, unknown>;
+}
+
 interface InboxMessage {
  channel: string;
  sender: string;
@@ -141,20 +153,34 @@ function OnboardingWizard({ onComplete }: { onComplete: (data: OnboardingData) =
  const [ttsVoice, setTtsVoice] = useState('');
  const [voiceSpeed, setVoiceSpeed] = useState(1.0);
  const [apiKey, setApiKey] = useState('');
- const [selectedProvider, setSelectedProvider] = useState('anthropic');
+ const [selectedProvider, setSelectedProvider] = useState('');
  const [oauthStatus, setOauthStatus] = useState<string | null>(null);
+ const [detectedAgents, setDetectedAgents] = useState<CLIAgentInfo[]>([]);
+ const [agentsLoading, setAgentsLoading] = useState(false);
 
  const steps = ['welcome', 'language', 'voice', 'provider'];
+
+ // Fetch detected CLI agents when reaching provider step
+ useEffect(() => {
+ if (steps[step] === 'provider') {
+ setAgentsLoading(true);
+ fetch('http://localhost:8003/cli-agents')
+ .then(r => r.ok ? r.json() : null)
+ .then(d => { if (d?.agents) setDetectedAgents(d.agents); })
+ .catch(() => {})
+ .finally(() => setAgentsLoading(false));
+ }
+ }, [step]);
 
  const canProceed = () => {
  switch (steps[step]) {
  case 'welcome': return userName.trim().length > 0;
- case 'language': return true; // locale always has default
+ case 'language': return true;
  case 'voice': return sttLang !== '' && ttsVoice !== '';
  case 'provider': {
- const meta = PROVIDER_META.find(p => p.id === selectedProvider);
- // OAuth providers require successful PKCE flow completion
- if (meta?.authType === 'oauth') return oauthStatus === 'complete';
+ // Accept if a CLI agent is selected and authenticated
+ if (apiKey === '__cli_authenticated__') return true;
+ // Or manual API key entered
  return apiKey.trim().length > 0 || selectedProvider === 'ollama';
  }
  default: return false;
@@ -238,63 +264,65 @@ function OnboardingWizard({ onComplete }: { onComplete: (data: OnboardingData) =
 
  {step === 3 && (
  <div className="onboarding-step">
- <h2>{locale === 'fr' ? 'Premier provider IA' : 'First AI provider'}</h2>
- <p className="settings-note">{locale === 'fr' ? 'Choisissez au moins un provider pour commencer.' : 'Choose at least one provider to get started.'}</p>
- <select className="onboarding-select" value={selectedProvider} onChange={(e) => { setSelectedProvider(e.target.value); setApiKey(''); setOauthStatus(null); }}>
- {PROVIDER_META.map(p => <option key={p.id} value={p.id}>{p.icon} {p.name} ({p.authType === 'oauth' ? 'OAuth' : p.id === 'ollama' ? 'Local' : 'API Key'})</option>)}
- </select>
+ <h2>{locale === 'fr' ? 'Agents IA détectés' : 'Detected AI Agents'}</h2>
+ <p className="settings-note">{locale === 'fr' ? 'Jarvis détecte automatiquement les CLI agents installés et authentifiés sur votre système.' : 'Jarvis automatically detects CLI agents installed and authenticated on your system.'}</p>
 
- {/* OAuth providers: real PKCE flow via backend */}
- {currentProvider.authType === 'oauth' && (
- <div className="oauth-flow">
- {!oauthStatus && (
- <>
- <p className="settings-note">
- {locale === 'fr'
- ? `Cliquez ci-dessous pour lancer l'authentification OAuth sécurisée avec ${currentProvider.name}. Le navigateur s'ouvrira automatiquement.`
- : `Click below to start secure OAuth authentication with ${currentProvider.name}. The browser will open automatically.`}
- </p>
- <button
- className="oauth-launch-btn"
- style={{ borderColor: currentProvider.color, color: currentProvider.color }}
- onClick={async () => {
- try {
- setOauthStatus('starting');
- const resp = await fetch(`http://localhost:8003/oauth/start/${selectedProvider}`, { method: 'POST' });
- if (!resp.ok) { const d = await resp.json().catch(() => ({})); setOauthStatus(`error:${d.detail || resp.status}`); return; }
- const data = await resp.json();
- window.open(data.authorize_url, '_blank');
- setOauthStatus('waiting');
- // Poll for completion
- const pollInterval = setInterval(async () => {
- try {
- const statusResp = await fetch(`http://localhost:8003/oauth/status/${selectedProvider}`);
- if (!statusResp.ok) return;
- const statusData = await statusResp.json();
- if (statusData.status === 'complete') {
- clearInterval(pollInterval);
- setOauthStatus('complete');
- setApiKey('__oauth_authenticated__');
- } else if (statusData.status === 'error') {
- clearInterval(pollInterval);
- setOauthStatus(`error:${statusData.error}`);
- }
- } catch {}
- }, 2000);
- // Auto-stop polling after 5 minutes
- setTimeout(() => { clearInterval(pollInterval); if (oauthStatus === 'waiting') setOauthStatus('timeout'); }, 300000);
- } catch (exc) {
- setOauthStatus(`error:${exc instanceof Error ? exc.message : 'Network error'}`);
+ {/* Auto-detected CLI agents */}
+ <div className="cli-agents-list">
+ {detectedAgents.length === 0 && !agentsLoading && (
+ <div className="settings-note" style={{ textAlign: 'center', padding: 20 }}>
+ {locale === 'fr' ? 'Aucun agent CLI détecté. Installez claude, codex, kimi ou cc2.' : 'No CLI agents detected. Install claude, codex, kimi or cc2.'}
+ </div>
+ )}
+ {agentsLoading && <div className="chat-loading">⏳ {locale === 'fr' ? 'Détection des agents...' : 'Detecting agents...'}</div>}
+ {detectedAgents.map((agent) => (
+ <div
+ key={agent.cli_command}
+ className={`cli-agent-card ${selectedProvider === agent.cli_command ? 'selected' : ''} ${!agent.is_authenticated ? 'unauthenticated' : ''}`}
+ style={{ '--agent-color': agent.is_authenticated ? 'var(--hud-green)' : 'var(--hud-red)' } as React.CSSProperties}
+ onClick={() => {
+ if (agent.is_authenticated) {
+ setSelectedProvider(agent.cli_command);
+ setApiKey('__cli_authenticated__');
  }
  }}
- disabled={oauthStatus === 'starting' || oauthStatus === 'waiting' || oauthStatus === 'complete'}
  >
- {oauthStatus === 'starting' ? '⏳ Préparation...' : oauthStatus === 'waiting' ? '⏳ En attente d\'autorisation...' : oauthStatus === 'complete' ? '✅ Authentifié !' : `🔗 ${locale === 'fr' ? 'Se connecter à' : 'Connect to'} ${currentProvider.name}`}
- </button>
- {oauthStatus?.startsWith('error:') && <div className="chat-error" style={{ marginTop: 8 }}>❌ {oauthStatus.replace('error:', '')}</div>}
- {oauthStatus === 'timeout' && <div className="chat-error" style={{ marginTop: 8 }}>❌ {locale === 'fr' ? 'Délai dépassé. Réessayez.' : 'Timed out. Try again.'}</div>}
- {oauthStatus === 'waiting' && <p className="settings-note" style={{ marginTop: 8 }}>{locale === 'fr' ? 'Autorisez l\'accès dans le navigateur ouvert...' : 'Authorize access in the opened browser...'}</p>}
- </>
+ <div className="cli-agent-header">
+ <span className="cli-agent-icon">{agent.is_authenticated ? '✅' : agent.is_installed ? '⚠️' : '❌'}</span>
+ <span className="cli-agent-name">{agent.name}</span>
+ <span className="cli-agent-cmd">{agent.cli_command}</span>
+ </div>
+ <div className="cli-agent-details">
+ {agent.model && <span className="cli-agent-model">📦 {agent.model}</span>}
+ {agent.session_count > 0 && <span className="cli-agent-sessions">💬 {agent.session_count} sessions</span>}
+ <span className={`cli-agent-auth ${agent.is_authenticated ? 'auth-ok' : 'auth-no'}`}>
+ {agent.is_authenticated ? (locale === 'fr' ? '🔐 Authentifié' : '🔐 Authenticated') : (locale === 'fr' ? '🔒 Non authentifié' : '🔒 Not authenticated')}
+ </span>
+ </div>
+ {!agent.is_installed && <p className="settings-note" style={{ marginTop: 4, fontSize: 10 }}>
+ {locale === 'fr' ? `Installez: npm i -g @anthropic-ai/claude-code` : `Install: npm i -g @anthropic-ai/claude-code`}
+ </p>}
+ {agent.is_installed && !agent.is_authenticated && <p className="settings-note" style={{ marginTop: 4, fontSize: 10 }}>
+ {locale === 'fr' ? `Lancez \`${agent.cli_command}\` dans un terminal pour vous authentifier` : `Run \`${agent.cli_command}\` in a terminal to authenticate`}
+ </p>}
+ </div>
+ ))}
+ </div>
+
+ {/* Manual API key fallback for providers without CLI */}
+ <details style={{ marginTop: 16 }}>
+ <summary className="onboarding-label" style={{ cursor: 'pointer' }}>
+ {locale === 'fr' ? '▸ Clé API manuelle (fallback)' : '▸ Manual API key (fallback)'}
+ </summary>
+ <div style={{ marginTop: 8 }}>
+ <select className="onboarding-select" value={selectedProvider} onChange={(e) => { setSelectedProvider(e.target.value); setApiKey(''); }}>
+ {PROVIDER_META.filter(p => p.authType === 'api_key').map(p => <option key={p.id} value={p.id}>{p.icon} {p.name}</option>)}
+ </select>
+ <input className="onboarding-input" type="password" placeholder="sk-..." value={apiKey} onChange={(e) => setApiKey(e.target.value)} style={{ marginTop: 8 }} />
+ </div>
+ </details>
+ </div>
+ )}
  )}
  {oauthStatus === 'complete' && (
  <div style={{ marginTop: 12, padding: 12, border: '1px solid var(--hud-green)', background: 'rgba(0,255,136,0.05)' }}>
