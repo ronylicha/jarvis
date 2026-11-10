@@ -24,18 +24,22 @@ interface SessionsData {
  scanned_at: string;
 }
 
-interface ProviderDef {
+/** Provider metadata — NO hardcoded models. Models are fetched live from APIs. */
+interface ProviderMeta {
  id: string;
  name: string;
  color: string;
  icon: string;
  authType: 'api_key' | 'oauth';
- models: ModelDef[];
+ /** OAuth authorization URL (only for oauth providers) */
+ oauthUrl?: string;
 }
 
-interface ModelDef {
+interface LiveModel {
  id: string;
  name: string;
+ owned_by?: string;
+ /** Pricing/context populated only when available from API */
  inputPrice?: number;
  outputPrice?: number;
  contextWindow?: number;
@@ -73,48 +77,26 @@ interface InboxMessage {
  subject?: string;
 }
 
-// --- Provider Catalog ---
+interface OnboardingData {
+ userName: string;
+ locale: Locale;
+ sttLanguage: string;
+ ttsVoice: string;
+ voiceSpeed: number;
+ completed: boolean;
+}
 
-const PROVIDERS: ProviderDef[] = [
- { id: 'anthropic', name: 'Claude', color: '#d97706', icon: '🟠', authType: 'api_key', models: [
- { id: 'claude-opus-4-20250514', name: 'Opus 4', inputPrice: 15, outputPrice: 75, contextWindow: 200000, tags: ['flagship', 'reasoning'] },
- { id: 'claude-sonnet-4-20250514', name: 'Sonnet 4', inputPrice: 3, outputPrice: 15, contextWindow: 200000, tags: ['balanced'] },
- { id: 'claude-haiku-3-5-20241022', name: 'Haiku 3.5', inputPrice: 0.8, outputPrice: 4, contextWindow: 200000, tags: ['fast', 'cheap'] },
- ]},
- { id: 'openai', name: 'Codex / GPT', color: '#10b981', icon: '🟢', authType: 'oauth', models: [
- { id: 'o3', name: 'o3', inputPrice: 2, outputPrice: 8, contextWindow: 200000, tags: ['reasoning'] },
- { id: 'gpt-4o', name: 'GPT-4o', inputPrice: 2.5, outputPrice: 10, contextWindow: 128000, tags: ['balanced'] },
- { id: 'gpt-4o-mini', name: 'GPT-4o Mini', inputPrice: 0.15, outputPrice: 0.6, contextWindow: 128000, tags: ['fast', 'cheap'] },
- { id: 'codex-mini-latest', name: 'Codex Mini', inputPrice: 1.5, outputPrice: 6, contextWindow: 200000, tags: ['coding'] },
- ]},
- { id: 'google', name: 'Gemini', color: '#3b82f6', icon: '🔵', authType: 'oauth', models: [
- { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', inputPrice: 1.25, outputPrice: 10, contextWindow: 1000000, tags: ['flagship', '1M-context'] },
- { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', inputPrice: 0.1, outputPrice: 0.4, contextWindow: 1048576, tags: ['fast', 'cheap', '1M-context'] },
- { id: 'gemini-2.5-flash-lite', name: '2.5 Flash Lite', inputPrice: 0.075, outputPrice: 0.3, contextWindow: 1000000, tags: ['cheapest'] },
- ]},
- { id: 'moonshot', name: 'Kimi', color: '#8b5cf6', icon: '🟣', authType: 'api_key', models: [
- { id: 'kimi-k2', name: 'Kimi K2', inputPrice: 0.4, outputPrice: 1.2, contextWindow: 131072, tags: ['coding', 'balanced'] },
- { id: 'moonshot-v1-128k', name: 'Moonshot 128K', inputPrice: 0.8, outputPrice: 2.4, contextWindow: 131072, tags: ['long-context'] },
- { id: 'moonshot-v1-8k', name: 'Moonshot 8K', inputPrice: 0.2, outputPrice: 0.6, contextWindow: 8192, tags: ['fast', 'cheap'] },
- ]},
- { id: 'minimax', name: 'MiniMax', color: '#ec4899', icon: '💗', authType: 'api_key', models: [
- { id: 'MiniMax-M1', name: 'M1', inputPrice: 0.55, outputPrice: 2.2, contextWindow: 1000000, tags: ['1M-context', 'reasoning'] },
- { id: 'abab7-chat', name: 'ABAB7', inputPrice: 0.1, outputPrice: 0.4, contextWindow: 256000, tags: ['fast', 'cheap'] },
- ]},
- { id: 'zhipu', name: 'GLM (Zhipu)', color: '#06b6d4', icon: '🩵', authType: 'api_key', models: [
- { id: 'glm-4-plus', name: 'GLM-4 Plus', inputPrice: 0.7, outputPrice: 2.8, contextWindow: 128000, tags: ['flagship'] },
- { id: 'glm-4-flash', name: 'GLM-4 Flash', inputPrice: 0, outputPrice: 0, contextWindow: 128000, tags: ['free', 'fast'] },
- { id: 'codegeex-4', name: 'CodeGeeX 4', inputPrice: 0, outputPrice: 0, contextWindow: 128000, tags: ['coding', 'free'] },
- ]},
- { id: 'openrouter', name: 'OpenRouter', color: '#f59e0b', icon: '🔶', authType: 'api_key', models: [
- { id: 'meta-llama/llama-4-maverick', name: 'Llama 4 Maverick', inputPrice: 0.2, outputPrice: 0.6, contextWindow: 1000000, tags: ['open-source', '1M-context'] },
- { id: 'qwen/qwen3-235b-a22b', name: 'Qwen3 235B', inputPrice: 0.14, outputPrice: 0.56, contextWindow: 131072, tags: ['open-source', 'cheap'] },
- { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1', inputPrice: 0.55, outputPrice: 2.19, contextWindow: 64000, tags: ['reasoning'] },
- ]},
- { id: 'cheaper_inference', name: 'Cheaper Inference', color: '#84cc16', icon: '💚', authType: 'api_key', models: [
- { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', inputPrice: 0.04, outputPrice: 0.04, contextWindow: 131072, tags: ['ultra-cheap', 'open-source'] },
- { id: 'qwen/qwen2.5-72b-instruct', name: 'Qwen 2.5 72B', inputPrice: 0.03, outputPrice: 0.03, contextWindow: 32768, tags: ['ultra-cheap'] },
- ]},
+// --- Provider metadata (NO models — fetched live from APIs) ---
+
+const PROVIDER_META: ProviderMeta[] = [
+ { id: 'anthropic', name: 'Claude', color: '#d97706', icon: '🟠', authType: 'oauth', oauthUrl: 'https://console.anthropic.com/settings/keys' },
+ { id: 'openai', name: 'OpenAI / Codex', color: '#10b981', icon: '🟢', authType: 'api_key' },
+ { id: 'google', name: 'Gemini', color: '#3b82f6', icon: '🔵', authType: 'oauth', oauthUrl: 'https://aistudio.google.com/apikey' },
+ { id: 'moonshot', name: 'Kimi', color: '#8b5cf6', icon: '🟣', authType: 'api_key' },
+ { id: 'minimax', name: 'MiniMax', color: '#ec4899', icon: '💗', authType: 'api_key' },
+ { id: 'zhipu', name: 'GLM (Zhipu)', color: '#06b6d4', icon: '🩵', authType: 'api_key' },
+ { id: 'openrouter', name: 'OpenRouter', color: '#f59e0b', icon: '🔶', authType: 'api_key' },
+ { id: 'ollama', name: 'Ollama (Local)', color: '#6b7280', icon: '🦙', authType: 'api_key' },
 ];
 
 const STT_LANGUAGES = [
@@ -134,67 +116,210 @@ const TTS_VOICES = [
  { id: 'de_DE-thorsten-medium', label: 'DE — Thorsten (Homme)', lang: 'de' },
 ];
 
-// --- Sub-components ---
+// --- Onboarding ---
 
-function AgentCard({ provider, status }: { provider: ProviderDef; status?: ProviderStatus }) {
- const isConfigured = status?.configured ?? false;
- if (!isConfigured) return null; // Only show configured providers
+const ONBOARDING_KEY = 'jarvis_onboarding';
+
+function loadOnboarding(): OnboardingData {
+ try {
+ const stored = localStorage.getItem(ONBOARDING_KEY);
+ if (stored) return JSON.parse(stored);
+ } catch {}
+ return { userName: '', locale: 'fr', sttLanguage: '', ttsVoice: '', voiceSpeed: 1.0, completed: false };
+}
+
+function saveOnboarding(data: OnboardingData) {
+ localStorage.setItem(ONBOARDING_KEY, JSON.stringify(data));
+}
+
+function OnboardingWizard({ onComplete }: { onComplete: (data: OnboardingData) => void }) {
+ const [step, setStep] = useState(0);
+ const [userName, setUserName] = useState('');
+ const [locale, setLocaleState] = useState<Locale>('fr');
+ const [sttLang, setSttLang] = useState('');
+ const [ttsVoice, setTtsVoice] = useState('');
+ const [voiceSpeed, setVoiceSpeed] = useState(1.0);
+ const [apiKey, setApiKey] = useState('');
+ const [selectedProvider, setSelectedProvider] = useState('anthropic');
+
+ const steps = ['welcome', 'language', 'voice', 'provider'];
+
+ const canProceed = () => {
+ switch (steps[step]) {
+ case 'welcome': return userName.trim().length > 0;
+ case 'language': return true; // locale always has default
+ case 'voice': return sttLang !== '' && ttsVoice !== '';
+ case 'provider': return apiKey.trim().length > 0 || selectedProvider === 'ollama';
+ default: return false;
+ }
+ };
+
+ const handleNext = () => {
+ if (step < steps.length - 1) {
+ setStep(step + 1);
+ } else {
+ // Save onboarding data
+ const data: OnboardingData = {
+ userName: userName.trim(),
+ locale,
+ sttLanguage: sttLang,
+ ttsVoice,
+ voiceSpeed,
+ completed: true,
+ };
+ saveOnboarding(data);
+ setLocale(locale);
+ // Save API key
+ try {
+ const keys = JSON.parse(localStorage.getItem('jarvis_api_keys') || '{}');
+ keys[selectedProvider] = apiKey.trim();
+ localStorage.setItem('jarvis_api_keys', JSON.stringify(keys));
+ } catch {}
+ // Save voice settings
+ localStorage.setItem('jarvis_voice_settings', JSON.stringify({ sttLang, ttsVoice, voiceSpeed }));
+ onComplete(data);
+ }
+ };
+
+ const currentProvider = PROVIDER_META.find(p => p.id === selectedProvider) || PROVIDER_META[0];
+
  return (
- <div className="agent-card" style={{ '--agent-color': provider.color } as React.CSSProperties}>
- <div className="agent-card-header">
- <span className="agent-icon">{provider.icon}</span>
- <div className="agent-info">
- <span className="agent-name">{provider.name}</span>
- <span className="agent-auth-type">{provider.authType === 'oauth' ? 'OAuth' : 'API Key'}</span>
+ <div className="onboarding-overlay">
+ <div className="onboarding-card">
+ <div className="onboarding-header">
+ <span className="onboarding-logo">◈ JARVIS</span>
+ <span className="onboarding-step">{step + 1}/{steps.length}</span>
  </div>
- <span className="agent-status-dot status-configured" />
+
+ {step === 0 && (
+ <div className="onboarding-step">
+ <h2>{locale === 'fr' ? 'Bienvenue sur Jarvis' : 'Welcome to Jarvis'}</h2>
+ <p>{locale === 'fr' ? 'Commençons par faire connaissance.' : "Let's get started."}</p>
+ <label className="onboarding-label">{locale === 'fr' ? 'Votre nom' : 'Your name'}</label>
+ <input className="onboarding-input" placeholder={locale === 'fr' ? 'Ex: Rony' : 'e.g. Rony'} value={userName} onChange={(e) => setUserName(e.target.value)} autoFocus />
  </div>
- <div className="agent-models-count">{provider.models.length} {t('common.models')}</div>
- <div className="agent-price-range">
- {Math.min(...provider.models.map(m => m.inputPrice ?? 0))}–{Math.max(...provider.models.map(m => m.inputPrice ?? 0))} $/M in
+ )}
+
+ {step === 1 && (
+ <div className="onboarding-step">
+ <h2>{locale === 'fr' ? 'Langue de l\'interface' : 'Interface language'}</h2>
+ <div className="locale-selector">
+ <button className={`locale-btn ${locale === 'fr' ? 'active' : ''}`} onClick={() => setLocaleState('fr')}>🇫🇷 Français</button>
+ <button className={`locale-btn ${locale === 'en' ? 'active' : ''}`} onClick={() => setLocaleState('en')}>🇬🇧 English</button>
+ </div>
+ </div>
+ )}
+
+ {step === 2 && (
+ <div className="onboarding-step">
+ <h2>{locale === 'fr' ? 'Paramètres voix' : 'Voice settings'}</h2>
+ <label className="onboarding-label">{locale === 'fr' ? 'Langue transcription (STT)' : 'Transcription language (STT)'}</label>
+ <select className="onboarding-select" value={sttLang} onChange={(e) => setSttLang(e.target.value)}>
+ <option value="">{locale === 'fr' ? '— Choisir —' : '— Select —'}</option>
+ {STT_LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+ </select>
+ <label className="onboarding-label" style={{ marginTop: 12 }}>{locale === 'fr' ? 'Voix synthèse (TTS)' : 'Synthesis voice (TTS)'}</label>
+ <select className="onboarding-select" value={ttsVoice} onChange={(e) => setTtsVoice(e.target.value)}>
+ <option value="">{locale === 'fr' ? '— Choisir —' : '— Select —'}</option>
+ {TTS_VOICES.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+ </select>
+ <label className="onboarding-label" style={{ marginTop: 12 }}>{locale === 'fr' ? `Vitesse: ${voiceSpeed.toFixed(1)}x` : `Speed: ${voiceSpeed.toFixed(1)}x`}</label>
+ <input type="range" min="0.5" max="2.0" step="0.1" value={voiceSpeed} onChange={(e) => setVoiceSpeed(parseFloat(e.target.value))} className="voice-slider" />
+ </div>
+ )}
+
+ {step === 3 && (
+ <div className="onboarding-step">
+ <h2>{locale === 'fr' ? 'Premier provider IA' : 'First AI provider'}</h2>
+ <p className="settings-note">{locale === 'fr' ? 'Choisissez au moins un provider pour commencer.' : 'Choose at least one provider to get started.'}</p>
+ <select className="onboarding-select" value={selectedProvider} onChange={(e) => setSelectedProvider(e.target.value)}>
+ {PROVIDER_META.map(p => <option key={p.id} value={p.id}>{p.icon} {p.name} ({p.authType})</option>)}
+ </select>
+ {currentProvider.authType === 'oauth' && currentProvider.oauthUrl && (
+ <div style={{ marginTop: 8 }}>
+ <a href={currentProvider.oauthUrl} target="_blank" rel="noopener noreferrer" className="key-oauth-btn" style={{ borderColor: currentProvider.color, color: currentProvider.color, display: 'inline-block', textDecoration: 'none', textAlign: 'center' }}>
+ 🔗 {locale === 'fr' ? 'Obtenir une clé API' : 'Get API key'}
+ </a>
+ </div>
+ )}
+ <label className="onboarding-label" style={{ marginTop: 12 }}>
+ {selectedProvider === 'ollama' ? (locale === 'fr' ? 'Ollama local (pas de clé requise)' : 'Local Ollama (no key needed)') : 'API Key'}
+ </label>
+ {selectedProvider !== 'ollama' && (
+ <input className="onboarding-input" type="password" placeholder="sk-..." value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+ )}
+ </div>
+ )}
+
+ <div className="onboarding-footer">
+ {step > 0 && <button className="onboarding-back-btn" onClick={() => setStep(step - 1)}>{locale === 'fr' ? '← Retour' : '← Back'}</button>}
+ <button className="onboarding-next-btn" onClick={handleNext} disabled={!canProceed()}>
+ {step === steps.length - 1 ? (locale === 'fr' ? '✓ Terminer' : '✓ Finish') : (locale === 'fr' ? 'Suivant →' : 'Next →')}
+ </button>
+ </div>
  </div>
  </div>
  );
 }
 
-function ModelTable({ provider, onRefresh, refreshing }: { provider: ProviderDef; onRefresh: () => void; refreshing: boolean }) {
+// --- Sub-components ---
+
+function AgentCard({ providerId, status, modelCount }: { providerId: string; status?: ProviderStatus; modelCount: number }) {
+ const meta = PROVIDER_META.find(p => p.id === providerId);
+ if (!meta) return null;
+ const isConfigured = status?.configured ?? false;
+ if (!isConfigured) return null;
+ return (
+ <div className="agent-card" style={{ '--agent-color': meta.color } as React.CSSProperties}>
+ <div className="agent-card-header">
+ <span className="agent-icon">{meta.icon}</span>
+ <div className="agent-info">
+ <span className="agent-name">{meta.name}</span>
+ <span className="agent-auth-type">{meta.authType === 'oauth' ? 'OAuth' : 'API Key'}</span>
+ </div>
+ <span className="agent-status-dot status-configured" />
+ </div>
+ <div className="agent-models-count">{modelCount} {t('common.models')}</div>
+ </div>
+ );
+}
+
+function ModelTable({ providerId, models, onRefresh, refreshing }: { providerId: string; models: LiveModel[]; onRefresh: () => void; refreshing: boolean }) {
+ const meta = PROVIDER_META.find(p => p.id === providerId);
+ if (!meta) return null;
  return (
  <div className="model-table-container">
  <div className="model-table-header">
- <h4 className="model-table-title" style={{ color: provider.color }}>
- {provider.icon} {provider.name} — {t('agents.models_title')}
+ <h4 className="model-table-title" style={{ color: meta.color }}>
+ {meta.icon} {meta.name} — {t('agents.models_title')}
  </h4>
  <button className="refresh-btn" onClick={onRefresh} disabled={refreshing}>
  {refreshing ? t('agents.refreshing') : t('agents.refresh_models')}
  </button>
  </div>
+ {models.length === 0 ? (
+ <div className="settings-note" style={{ padding: 20, textAlign: 'center' }}>
+ {refreshing ? t('agents.refreshing') : (t('agents.only_configured') + ' — ' + t('agents.refresh_models'))}
+ </div>
+ ) : (
  <table className="model-table">
- <thead>
- <tr>
- <th>{t('agents.th_model')}</th>
- <th>{t('agents.th_input')}</th>
- <th>{t('agents.th_output')}</th>
- <th>{t('agents.th_context')}</th>
- <th>{t('agents.th_tags')}</th>
- </tr>
- </thead>
+ <thead><tr><th>{t('agents.th_model')}</th><th>ID</th><th>{t('agents.th_context')}</th></tr></thead>
  <tbody>
- {provider.models.map((m) => (
+ {models.map((m) => (
  <tr key={m.id}>
- <td className="model-name">{m.name}</td>
- <td className="model-price">{m.inputPrice !== undefined ? `$${m.inputPrice}` : '—'}</td>
- <td className="model-price">{m.outputPrice !== undefined ? `$${m.outputPrice}` : '—'}</td>
+ <td className="model-name">{m.name || m.id}</td>
+ <td className="model-context" style={{ fontSize: 10, opacity: 0.6 }}>{m.id}</td>
  <td className="model-context">{m.contextWindow ? `${(m.contextWindow / 1000).toFixed(0)}K` : '—'}</td>
- <td className="model-tags">{m.tags?.map(tag => <span key={tag} className="tag">{tag}</span>)}</td>
  </tr>
  ))}
  </tbody>
  </table>
+ )}
  </div>
  );
 }
 
-function SettingsPanel() {
+function SettingsPanel({ onKeysChanged }: { onKeysChanged?: () => void }) {
  const [keys, setKeys] = useState<Record<string, string>>({});
  const [saved, setSaved] = useState<string | null>(null);
  const [showKey, setShowKey] = useState<Record<string, boolean>>({});
@@ -207,14 +332,9 @@ function SettingsPanel() {
  try {
  const stored = localStorage.getItem('jarvis_api_keys');
  if (stored) setKeys(JSON.parse(stored));
- const voiceSettings = localStorage.getItem('jarvis_voice_settings');
- if (voiceSettings) {
- const vs = JSON.parse(voiceSettings);
- if (vs.sttLang) setSttLang(vs.sttLang);
- if (vs.ttsVoice) setTtsVoice(vs.ttsVoice);
- if (vs.voiceSpeed) setVoiceSpeed(vs.voiceSpeed);
- }
- } catch { /* ignore */ }
+ const vs = localStorage.getItem('jarvis_voice_settings');
+ if (vs) { const v = JSON.parse(vs); if (v.sttLang) setSttLang(v.sttLang); if (v.ttsVoice) setTtsVoice(v.ttsVoice); if (v.voiceSpeed) setVoiceSpeed(v.voiceSpeed); }
+ } catch {}
  }, []);
 
  const handleSave = useCallback(() => {
@@ -223,186 +343,101 @@ function SettingsPanel() {
  localStorage.setItem('jarvis_voice_settings', JSON.stringify({ sttLang, ttsVoice, voiceSpeed }));
  setSaved(t('settings.saved'));
  setTimeout(() => setSaved(null), 3000);
- } catch {
- setSaved(t('settings.error'));
- }
- }, [keys, sttLang, ttsVoice, voiceSpeed]);
+ onKeysChanged?.();
+ } catch { setSaved(t('settings.error')); }
+ }, [keys, sttLang, ttsVoice, voiceSpeed, onKeysChanged]);
 
- const handleLocaleChange = (newLocale: Locale) => {
- setLocale(newLocale);
- setLocaleState(newLocale);
- };
+ const handleLocaleChange = (newLocale: Locale) => { setLocale(newLocale); setLocaleState(newLocale); };
 
  return (
  <div className="settings-panel">
- {/* Language selector */}
  <h3 className="panel-title">{t('settings.language')}</h3>
  <div className="locale-selector">
  <button className={`locale-btn ${locale === 'fr' ? 'active' : ''}`} onClick={() => handleLocaleChange('fr')}>🇫🇷 Français</button>
  <button className={`locale-btn ${locale === 'en' ? 'active' : ''}`} onClick={() => handleLocaleChange('en')}>🇬🇧 English</button>
  </div>
 
- {/* Voice settings */}
  <h3 className="panel-title" style={{ marginTop: 20 }}>{t('settings.section_voice')}</h3>
  <div className="voice-settings">
- <div className="voice-row">
- <label>{t('settings.stt_language')}</label>
- <select value={sttLang} onChange={(e) => setSttLang(e.target.value)} className="voice-select">
- {STT_LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
- </select>
- </div>
- <div className="voice-row">
- <label>{t('settings.tts_voice')}</label>
- <select value={ttsVoice} onChange={(e) => setTtsVoice(e.target.value)} className="voice-select">
- {TTS_VOICES.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
- </select>
- </div>
- <div className="voice-row">
- <label>{t('settings.voice_speed')}: {voiceSpeed.toFixed(1)}x</label>
- <input type="range" min="0.5" max="2.0" step="0.1" value={voiceSpeed} onChange={(e) => setVoiceSpeed(parseFloat(e.target.value))} className="voice-slider" />
- </div>
+ <div className="voice-row"><label>{t('settings.stt_language')}</label><select value={sttLang} onChange={(e) => setSttLang(e.target.value)} className="voice-select">{STT_LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}</select></div>
+ <div className="voice-row"><label>{t('settings.tts_voice')}</label><select value={ttsVoice} onChange={(e) => setTtsVoice(e.target.value)} className="voice-select">{TTS_VOICES.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}</select></div>
+ <div className="voice-row"><label>{t('settings.voice_speed')}: {voiceSpeed.toFixed(1)}x</label><input type="range" min="0.5" max="2.0" step="0.1" value={voiceSpeed} onChange={(e) => setVoiceSpeed(parseFloat(e.target.value))} className="voice-slider" /></div>
  </div>
 
- {/* API Keys */}
  <h3 className="panel-title" style={{ marginTop: 20 }}>{t('settings.section_keys')}</h3>
  <p className="settings-note">{t('settings.note')}</p>
  <div className="key-list">
- {PROVIDERS.map((p) => (
+ {PROVIDER_META.map((p) => (
  <div key={p.id} className="key-row">
- <label className="key-label" style={{ color: p.color }}>
- {p.icon} {p.name}
- <span className="key-auth-badge">{p.authType}</span>
- </label>
+ <label className="key-label" style={{ color: p.color }}>{p.icon} {p.name}<span className="key-auth-badge">{p.authType}</span></label>
  <div className="key-input-row">
- <input
- type={showKey[p.id] ? 'text' : 'password'}
- className="key-input"
- placeholder={p.authType === 'oauth' ? 'OAuth flow' : `sk-...`}
- value={keys[p.id] || ''}
- onChange={(e) => setKeys(prev => ({ ...prev, [p.id]: e.target.value }))}
- disabled={p.authType === 'oauth'}
- />
- {p.authType === 'api_key' && (
- <button className="key-toggle-btn" onClick={() => setShowKey(prev => ({ ...prev, [p.id]: !prev[p.id] }))}>
- {showKey[p.id] ? '🙈' : '👁️'}
- </button>
- )}
- {p.authType === 'oauth' && (
- <button className="key-oauth-btn" style={{ borderColor: p.color, color: p.color }}>
- 🔗 {t('settings.oauth_connect')}
- </button>
- )}
+ <input type={showKey[p.id] ? 'text' : 'password'} className="key-input" placeholder={p.authType === 'oauth' ? 'OAuth / API key' : 'sk-...'} value={keys[p.id] || ''} onChange={(e) => setKeys(prev => ({ ...prev, [p.id]: e.target.value }))} />
+ {p.authType === 'api_key' && <button className="key-toggle-btn" onClick={() => setShowKey(prev => ({ ...prev, [p.id]: !prev[p.id] }))}>{showKey[p.id] ? '🙈' : '👁️'}</button>}
+ {p.authType === 'oauth' && p.oauthUrl && <a href={p.oauthUrl} target="_blank" rel="noopener noreferrer" className="key-oauth-btn" style={{ borderColor: p.color, color: p.color, textDecoration: 'none', display: 'flex', alignItems: 'center' }}>🔗 {t('settings.oauth_connect')}</a>}
  </div>
  </div>
  ))}
  </div>
 
- {/* Messaging connectors */}
  <h3 className="panel-title" style={{ marginTop: 20 }}>{t('settings.section_messaging')}</h3>
  <p className="settings-note">{t('settings.messaging_note')}</p>
  <div className="key-list">
- <div className="key-row">
- <label className="key-label" style={{ color: '#229ED9' }}>✈️ Telegram</label>
- <div className="key-input-row">
- <input className="key-input" placeholder={t('settings.telegram_token')} value={keys['telegram_token'] || ''} onChange={(e) => setKeys(prev => ({ ...prev, telegram_token: e.target.value }))} />
- </div>
- <div className="key-input-row" style={{ marginTop: 4 }}>
- <input className="key-input" placeholder={t('settings.telegram_chat_id')} value={keys['telegram_chat_id'] || ''} onChange={(e) => setKeys(prev => ({ ...prev, telegram_chat_id: e.target.value }))} />
- </div>
- </div>
- <div className="key-row">
- <label className="key-label" style={{ color: '#25D366' }}>📱 WhatsApp</label>
- <div className="key-input-row">
- <input className="key-input" placeholder={t('settings.whatsapp_token')} value={keys['whatsapp_token'] || ''} onChange={(e) => setKeys(prev => ({ ...prev, whatsapp_token: e.target.value }))} />
- </div>
- <div className="key-input-row" style={{ marginTop: 4 }}>
- <input className="key-input" placeholder={t('settings.whatsapp_phone_id')} value={keys['whatsapp_phone_id'] || ''} onChange={(e) => setKeys(prev => ({ ...prev, whatsapp_phone_id: e.target.value }))} />
- </div>
- </div>
- <div className="key-row">
- <label className="key-label" style={{ color: '#EA4335' }}>📧 Email</label>
- <div className="key-input-row">
- <input className="key-input" placeholder={t('settings.email_imap_host')} value={keys['email_imap_host'] || ''} onChange={(e) => setKeys(prev => ({ ...prev, email_imap_host: e.target.value }))} />
- </div>
- <div className="key-input-row" style={{ marginTop: 4 }}>
- <input className="key-input" placeholder={t('settings.email_imap_user')} value={keys['email_imap_user'] || ''} onChange={(e) => setKeys(prev => ({ ...prev, email_imap_user: e.target.value }))} />
- </div>
- <div className="key-input-row" style={{ marginTop: 4 }}>
- <input className="key-input" type="password" placeholder={t('settings.email_imap_pass')} value={keys['email_imap_pass'] || ''} onChange={(e) => setKeys(prev => ({ ...prev, email_imap_pass: e.target.value }))} />
- </div>
- </div>
+ <div className="key-row"><label className="key-label" style={{ color: '#229ED9' }}>✈️ Telegram</label><div className="key-input-row"><input className="key-input" placeholder={t('settings.telegram_token')} value={keys['telegram_token'] || ''} onChange={(e) => setKeys(prev => ({ ...prev, telegram_token: e.target.value }))} /></div><div className="key-input-row" style={{ marginTop: 4 }}><input className="key-input" placeholder={t('settings.telegram_chat_id')} value={keys['telegram_chat_id'] || ''} onChange={(e) => setKeys(prev => ({ ...prev, telegram_chat_id: e.target.value }))} /></div></div>
+ <div className="key-row"><label className="key-label" style={{ color: '#25D366' }}>📱 WhatsApp</label><div className="key-input-row"><input className="key-input" placeholder={t('settings.whatsapp_token')} value={keys['whatsapp_token'] || ''} onChange={(e) => setKeys(prev => ({ ...prev, whatsapp_token: e.target.value }))} /></div><div className="key-input-row" style={{ marginTop: 4 }}><input className="key-input" placeholder={t('settings.whatsapp_phone_id')} value={keys['whatsapp_phone_id'] || ''} onChange={(e) => setKeys(prev => ({ ...prev, whatsapp_phone_id: e.target.value }))} /></div></div>
+ <div className="key-row"><label className="key-label" style={{ color: '#EA4335' }}>📧 Email</label><div className="key-input-row"><input className="key-input" placeholder={t('settings.email_imap_host')} value={keys['email_imap_host'] || ''} onChange={(e) => setKeys(prev => ({ ...prev, email_imap_host: e.target.value }))} /></div><div className="key-input-row" style={{ marginTop: 4 }}><input className="key-input" placeholder={t('settings.email_imap_user')} value={keys['email_imap_user'] || ''} onChange={(e) => setKeys(prev => ({ ...prev, email_imap_user: e.target.value }))} /></div><div className="key-input-row" style={{ marginTop: 4 }}><input className="key-input" type="password" placeholder={t('settings.email_imap_pass')} value={keys['email_imap_pass'] || ''} onChange={(e) => setKeys(prev => ({ ...prev, email_imap_pass: e.target.value }))} /></div></div>
  </div>
 
- <div className="settings-actions">
- <button className="save-btn" onClick={handleSave}>💾 {t('settings.save')}</button>
- {saved && <span className="save-feedback">{saved}</span>}
- </div>
+ <div className="settings-actions"><button className="save-btn" onClick={handleSave}>💾 {t('settings.save')}</button>{saved && <span className="save-feedback">{saved}</span>}</div>
  </div>
  );
 }
 
-function DashboardView({ statuses }: { statuses: ProviderStatus[] }) {
- const configuredProviders = PROVIDERS.filter(p => statuses.find(s => s.name === p.id)?.configured);
+function DashboardView({ statuses, liveModels }: { statuses: ProviderStatus[]; liveModels: Record<string, LiveModel[]> }) {
+ const configuredProviders = statuses.filter(s => s.configured);
  const configuredCount = configuredProviders.length;
- const totalModels = configuredProviders.reduce((sum, p) => sum + p.models.length, 0);
- const cheapestModel = configuredProviders.flatMap(p => p.models).sort((a, b) => (a.inputPrice ?? 999) - (b.inputPrice ?? 999))[0];
+ const totalModels = configuredProviders.reduce((sum, s) => sum + (liveModels[s.name]?.length || 0), 0);
 
  return (
  <div className="dashboard-view">
  <div className="dash-stats">
- <div className="stat-card">
- <span className="stat-value">{configuredCount}/{PROVIDERS.length}</span>
- <span className="stat-label">{t('dash.providers_configured')}</span>
- </div>
- <div className="stat-card">
- <span className="stat-value">{totalModels}</span>
- <span className="stat-label">{t('dash.models_available')}</span>
- </div>
- <div className="stat-card">
- <span className="stat-value">${cheapestModel?.inputPrice ?? '?'}</span>
- <span className="stat-label">{t('dash.min_price')}</span>
- </div>
+ <div className="stat-card"><span className="stat-value">{configuredCount}/{PROVIDER_META.length}</span><span className="stat-label">{t('dash.providers_configured')}</span></div>
+ <div className="stat-card"><span className="stat-value">{totalModels}</span><span className="stat-label">{t('dash.models_available')}</span></div>
  </div>
  <h3 className="panel-title" style={{ marginTop: 24 }}>{t('dash.hub_agents')}</h3>
  {configuredCount === 0 && <p className="settings-note">{t('dash.no_providers')}</p>}
  <div className="agent-grid">
- {PROVIDERS.map(p => (
- <AgentCard key={p.id} provider={p} status={statuses.find(s => s.name === p.id)} />
- ))}
+ {statuses.map(s => <AgentCard key={s.name} providerId={s.name} status={s} modelCount={liveModels[s.name]?.length || 0} />)}
  </div>
  </div>
  );
 }
 
-function AgentsDetailView({ statuses }: { statuses: ProviderStatus[] }) {
- const configuredProviders = PROVIDERS.filter(p => statuses.find(s => s.name === p.id)?.configured);
- const [selectedProvider, setSelectedProvider] = useState<string>(configuredProviders[0]?.id || PROVIDERS[0].id);
+function AgentsDetailView({ statuses, liveModels, onRefresh }: { statuses: ProviderStatus[]; liveModels: Record<string, LiveModel[]>; onRefresh: (provider: string) => void }) {
+ const configuredProviders = statuses.filter(s => s.configured);
+ const [selectedProvider, setSelectedProvider] = useState<string>(configuredProviders[0]?.name || '');
  const [refreshing, setRefreshing] = useState(false);
- const selected = PROVIDERS.find(p => p.id === selectedProvider) || PROVIDERS[0];
+
+ useEffect(() => { if (configuredProviders.length > 0 && !selectedProvider) setSelectedProvider(configuredProviders[0].name); }, [configuredProviders, selectedProvider]);
 
  const handleRefresh = useCallback(async () => {
  setRefreshing(true);
- try {
- await fetch(`http://localhost:8003/models/refresh?provider=${selectedProvider}`, { method: 'GET' });
- } catch { /* ignore */ }
+ await onRefresh(selectedProvider);
  setTimeout(() => setRefreshing(false), 1500);
- }, [selectedProvider]);
+ }, [selectedProvider, onRefresh]);
 
- if (configuredProviders.length === 0) {
- return <div className="settings-note" style={{ padding: 40, textAlign: 'center' }}>{t('agents.only_configured')}</div>;
- }
+ if (configuredProviders.length === 0) return <div className="settings-note" style={{ padding: 40, textAlign: 'center' }}>{t('agents.only_configured')}</div>;
 
  return (
  <div className="agents-detail">
  <p className="settings-note">{t('agents.only_configured')}</p>
  <div className="provider-tabs">
- {configuredProviders.map(p => (
- <button key={p.id} className={`provider-tab ${selectedProvider === p.id ? 'active' : ''}`} style={{ '--tab-color': p.color } as React.CSSProperties} onClick={() => setSelectedProvider(p.id)}>
- {p.icon} {p.name}
- </button>
- ))}
+ {configuredProviders.map(s => {
+ const meta = PROVIDER_META.find(p => p.id === s.name);
+ if (!meta) return null;
+ return <button key={s.name} className={`provider-tab ${selectedProvider === s.name ? 'active' : ''}`} style={{ '--tab-color': meta.color } as React.CSSProperties} onClick={() => setSelectedProvider(s.name)}>{meta.icon} {meta.name}</button>;
+ })}
  </div>
- <ModelTable provider={selected} onRefresh={handleRefresh} refreshing={refreshing} />
+ <ModelTable providerId={selectedProvider} models={liveModels[selectedProvider] || []} onRefresh={handleRefresh} refreshing={refreshing} />
  </div>
  );
 }
@@ -410,35 +445,62 @@ function AgentsDetailView({ statuses }: { statuses: ProviderStatus[] }) {
 // --- Chat Panel ---
 
 const CHAT_STORAGE_KEY = 'jarvis_chat_history';
+function loadChatHistory(): ChatMessage[] { try { const s = localStorage.getItem(CHAT_STORAGE_KEY); return s ? JSON.parse(s) : []; } catch { return []; } }
+function saveChatHistory(msgs: ChatMessage[]) { try { localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(msgs.slice(-200))); } catch {} }
 
-function loadChatHistory(): ChatMessage[] {
- try { const stored = localStorage.getItem(CHAT_STORAGE_KEY); return stored ? JSON.parse(stored) : []; } catch { return []; }
-}
-function saveChatHistory(msgs: ChatMessage[]) {
- try { localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(msgs.slice(-200))); } catch { /* ignore */ }
-}
-
-function ChatPanel() {
- const [messages, setMessages] = useState<ChatMessage[]>(loadChatHistory);
+function ChatPanel({ welcomeMessage }: { welcomeMessage?: string }) {
+ const [messages, setMessages] = useState<ChatMessage[]>(() => {
+ const hist = loadChatHistory();
+ if (hist.length === 0 && welcomeMessage) {
+ return [{ role: 'assistant', content: welcomeMessage, provider: 'jarvis', timestamp: Date.now() }];
+ }
+ return hist;
+ });
  const [input, setInput] = useState('');
- const [selectedProvider, setSelectedProvider] = useState(PROVIDERS[0].id);
- const [selectedModel, setSelectedModel] = useState(PROVIDERS[0].models[0].id);
+ const [selectedProvider, setSelectedProvider] = useState('');
+ const [selectedModel, setSelectedModel] = useState('');
  const [loading, setLoading] = useState(false);
  const [error, setError] = useState<string | null>(null);
  const [streamingContent, setStreamingContent] = useState('');
-
- const currentProvider = PROVIDERS.find(p => p.id === selectedProvider) || PROVIDERS[0];
- const currentModel = currentProvider.models.find(m => m.id === selectedModel) || currentProvider.models[0];
+ const [providerStatuses, setProviderStatuses] = useState<ProviderStatus[]>([]);
+ const [liveModels, setLiveModels] = useState<Record<string, LiveModel[]>>({});
 
  useEffect(() => { saveChatHistory(messages); }, [messages]);
- useEffect(() => { setSelectedModel(currentProvider.models[0]?.id || ''); }, [selectedProvider, currentProvider]);
 
- const estimateCost = (inputChars: number, outputChars: number): number => {
- return (Math.ceil(inputChars / 4) / 1_000_000) * (currentModel.inputPrice ?? 0) + (Math.ceil(outputChars / 4) / 1_000_000) * (currentModel.outputPrice ?? 0);
- };
+ useEffect(() => {
+ async function load() {
+ try {
+ const resp = await fetch('http://localhost:8003/providers');
+ if (resp.ok) { const d = await resp.json(); setProviderStatuses(d.providers || []); }
+ } catch {}
+ }
+ load();
+ }, []);
+
+ const configuredProviders = providerStatuses.filter(s => s.configured);
+ useEffect(() => { if (configuredProviders.length > 0 && !selectedProvider) setSelectedProvider(configuredProviders[0].name); }, [configuredProviders, selectedProvider]);
+
+ const currentModels = liveModels[selectedProvider] || [];
+ useEffect(() => { if (currentModels.length > 0 && !selectedModel) setSelectedModel(currentModels[0].id); }, [currentModels, selectedModel]);
+
+ // Fetch models when provider changes
+ useEffect(() => {
+ if (!selectedProvider) return;
+ async function fetchModels() {
+ try {
+ const resp = await fetch(`http://localhost:8003/models/refresh?provider=${selectedProvider}`);
+ if (resp.ok) {
+ const d = await resp.json();
+ const models = d.providers?.[selectedProvider]?.models || [];
+ setLiveModels(prev => ({ ...prev, [selectedProvider]: models }));
+ }
+ } catch {}
+ }
+ fetchModels();
+ }, [selectedProvider]);
 
  const handleSend = useCallback(async () => {
- if (!input.trim() || loading) return;
+ if (!input.trim() || loading || !selectedProvider) return;
  const userMsg: ChatMessage = { role: 'user', content: input.trim(), timestamp: Date.now() };
  setMessages(prev => [...prev, userMsg]);
  setInput(''); setLoading(true); setError(null); setStreamingContent('');
@@ -447,49 +509,42 @@ function ChatPanel() {
  try {
  const resp = await fetch('http://localhost:8003/chat/stream', {
  method: 'POST', headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify({ messages: allMessages, provider: selectedProvider, model: selectedModel }),
+ body: JSON.stringify({ messages: allMessages, provider: selectedProvider, model: selectedModel || undefined }),
  });
  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
  if (!resp.body) throw new Error('No stream');
 
- const reader = resp.body.getReader();
- const decoder = new TextDecoder();
+ const reader = resp.body.getReader(); const decoder = new TextDecoder();
  let finalContent = '', finalProvider = selectedProvider, finalModel = selectedModel;
 
  while (true) {
- const { done, value } = await reader.read();
- if (done) break;
+ const { done, value } = await reader.read(); if (done) break;
  const chunk = decoder.decode(value, { stream: true });
  for (const line of chunk.split('\n')) {
  if (!line.startsWith('data: ')) continue;
  try {
  const event = JSON.parse(line.slice(6).trim());
  if (event.error) throw new Error(event.error);
- if (event.done && event.content !== undefined) {
- finalContent = event.content;
- finalProvider = event.provider || finalProvider;
- finalModel = event.model || finalModel;
- }
+ if (event.done && event.content !== undefined) { finalContent = event.content; finalProvider = event.provider || finalProvider; finalModel = event.model || finalModel; }
  } catch (e) { if (e instanceof Error && e.message.includes('LLM')) throw e; }
  }
  }
 
- const totalInputChars = allMessages.reduce((sum, m) => sum + m.content.length, 0);
- setMessages(prev => [...prev, { role: 'assistant', content: finalContent, provider: finalProvider, model: finalModel, costEstimate: estimateCost(totalInputChars, finalContent.length), timestamp: Date.now() }]);
+ setMessages(prev => [...prev, { role: 'assistant', content: finalContent, provider: finalProvider, model: finalModel, timestamp: Date.now() }]);
  setStreamingContent('');
  } catch (exc) { setError(exc instanceof Error ? exc.message : 'Error'); setStreamingContent(''); }
  finally { setLoading(false); }
- }, [input, loading, messages, selectedProvider, selectedModel, currentModel]);
+ }, [input, loading, messages, selectedProvider, selectedModel]);
 
  return (
  <div className="chat-panel">
  <h3 className="panel-title">{t('chat.title')}</h3>
  <div className="chat-controls">
  <select className="chat-select" value={selectedProvider} onChange={(e) => setSelectedProvider(e.target.value)}>
- {PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.icon} {p.name}</option>)}
+ {configuredProviders.map(s => { const m = PROVIDER_META.find(p => p.id === s.name); return <option key={s.name} value={s.name}>{m?.icon} {m?.name || s.name}</option>; })}
  </select>
  <select className="chat-select" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
- {currentProvider.models.map(m => <option key={m.id} value={m.id}>{m.name} — {m.inputPrice !== undefined ? `$${m.inputPrice}/M` : t('common.free')}</option>)}
+ {currentModels.map(m => <option key={m.id} value={m.id}>{m.name || m.id}</option>)}
  </select>
  </div>
  <div className="chat-messages">
@@ -504,12 +559,7 @@ function ChatPanel() {
  <div className="chat-msg-content">{msg.content}</div>
  </div>
  ))}
- {loading && streamingContent && (
- <div className="chat-msg chat-msg-assistant chat-msg-streaming">
- <div className="chat-msg-header"><span className="chat-msg-role">🤖 {selectedProvider}</span><span className="chat-streaming-indicator">● streaming</span></div>
- <div className="chat-msg-content">{streamingContent}</div>
- </div>
- )}
+ {loading && streamingContent && <div className="chat-msg chat-msg-assistant chat-msg-streaming"><div className="chat-msg-header"><span className="chat-msg-role">🤖 {selectedProvider}</span><span className="chat-streaming-indicator">● streaming</span></div><div className="chat-msg-content">{streamingContent}</div></div>}
  {loading && !streamingContent && <div className="chat-loading">⏳ {t('chat.connecting')}</div>}
  {error && <div className="chat-error">❌ {error}</div>}
  </div>
@@ -546,10 +596,7 @@ function SessionsPanel() {
  const { done, value } = await reader.read(); if (done) break;
  buffer += decoder.decode(value, { stream: true });
  const lines = buffer.split('\n'); buffer = lines.pop() || '';
- for (const line of lines) {
- if (!line.startsWith('data: ')) continue;
- try { const parsed = JSON.parse(line.slice(6).trim()); if (parsed.error) setError(parsed.error); else { setData(parsed); setError(null); } } catch {}
- }
+ for (const line of lines) { if (!line.startsWith('data: ')) continue; try { const parsed = JSON.parse(line.slice(6).trim()); if (parsed.error) setError(parsed.error); else { setData(parsed); setError(null); } } catch {} }
  }
  } catch (exc) { if (exc instanceof Error && exc.name !== 'AbortError') { setError(exc.message); setConnected(false); setTimeout(connectSSE, 5000); } }
  }
@@ -570,11 +617,7 @@ function SessionsPanel() {
  {!data || data.sessions.length === 0 ? <div className="sessions-empty">{t('sessions.empty')}</div> : (
  data.sessions.map((session) => (
  <div key={session.session_id} className="session-card" style={{ '--agent-color': AGENT_COLORS[session.agent_type] || '#666' } as React.CSSProperties}>
- <div className="session-card-header">
- <span className="session-icon">{AGENT_ICONS[session.agent_type] || '⚪'}</span>
- <span className="session-agent-name">{session.agent_type.toUpperCase()}</span>
- <span className={`session-status-badge status-${session.status}`}>{session.status}</span>
- </div>
+ <div className="session-card-header"><span className="session-icon">{AGENT_ICONS[session.agent_type] || '⚪'}</span><span className="session-agent-name">{session.agent_type.toUpperCase()}</span><span className={`session-status-badge status-${session.status}`}>{session.status}</span></div>
  <div className="session-details">
  {session.pid && <div className="session-detail"><span className="detail-label">{t('sessions.pid')}</span><span className="detail-value">{session.pid}</span></div>}
  {session.model && <div className="session-detail"><span className="detail-label">{t('sessions.model')}</span><span className="detail-value">{session.model}</span></div>}
@@ -596,34 +639,15 @@ function MemoryView() {
  const [memories, setMemories] = useState<MemoryItem[]>([]);
  const [loading, setLoading] = useState(false);
  const [query, setQuery] = useState('');
-
- const loadMemories = useCallback(async (q: string) => {
- try { setLoading(true);
- const resp = await fetch('http://localhost:8004/recall', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q || '*', limit: 20 }) });
- if (resp.ok) { const data = await resp.json(); setMemories(data.results || []); }
- } catch {} finally { setLoading(false); }
- }, []);
-
+ const loadMemories = useCallback(async (q: string) => { try { setLoading(true); const resp = await fetch('http://localhost:8004/recall', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q || '*', limit: 20 }) }); if (resp.ok) { const data = await resp.json(); setMemories(data.results || []); } } catch {} finally { setLoading(false); } }, []);
  useEffect(() => { loadMemories(''); }, [loadMemories]);
-
  return (
  <div className="memory-view">
  <h3 className="panel-title">{t('memory.title')}</h3>
- <div className="memory-search">
- <input className="memory-search-input" placeholder={t('memory.search_placeholder')} value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && loadMemories(query)} />
- <button className="memory-search-btn" onClick={() => loadMemories(query)}>🔍</button>
- </div>
+ <div className="memory-search"><input className="memory-search-input" placeholder={t('memory.search_placeholder')} value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && loadMemories(query)} /><button className="memory-search-btn" onClick={() => loadMemories(query)}>🔍</button></div>
  <div className="memory-list">
  {loading ? <div className="memory-loading">{t('memory.loading')}</div> : memories.length === 0 ? <div className="memory-empty">{t('memory.empty')}</div> : (
- memories.map((m) => (
- <div key={m.id} className="memory-item-full">
- <div className="memory-meta">
- <span className="memory-agent-tag">{(m.metadata?.agent_id as string) || 'unknown'}</span>
- {m.score !== undefined && <span className="memory-score">score: {m.score.toFixed(3)}</span>}
- </div>
- <div className="memory-text">{m.content}</div>
- </div>
- ))
+ memories.map((m) => (<div key={m.id} className="memory-item-full"><div className="memory-meta"><span className="memory-agent-tag">{(m.metadata?.agent_id as string) || 'unknown'}</span>{m.score !== undefined && <span className="memory-score">score: {m.score.toFixed(3)}</span>}</div><div className="memory-text">{m.content}</div></div>))
  )}
  </div>
  </div>
@@ -642,92 +666,19 @@ function MessagingPanel() {
  const [composeSubject, setComposeSubject] = useState('');
  const [sendStatus, setSendStatus] = useState<string | null>(null);
 
- useEffect(() => {
- async function loadData() {
- try {
- const chResp = await fetch('http://localhost:8008/channels');
- if (chResp.ok) { const d = await chResp.json(); setChannels(d.channels || {}); }
- } catch {}
- }
- loadData();
- }, []);
-
- const fetchInbox = useCallback(async () => {
- setLoading(true);
- try {
- const resp = await fetch('http://localhost:8008/inbox');
- if (resp.ok) { const d = await resp.json(); setMessages(d.messages || []); }
- } catch {} finally { setLoading(false); }
- }, []);
-
+ useEffect(() => { async function loadData() { try { const chResp = await fetch('http://localhost:8008/channels'); if (chResp.ok) { const d = await chResp.json(); setChannels(d.channels || {}); } } catch {} } loadData(); }, []);
+ const fetchInbox = useCallback(async () => { setLoading(true); try { const resp = await fetch('http://localhost:8008/inbox'); if (resp.ok) { const d = await resp.json(); setMessages(d.messages || []); } } catch {} finally { setLoading(false); } }, []);
  useEffect(() => { fetchInbox(); }, [fetchInbox]);
-
- const handleSend = useCallback(async () => {
- if (!composeTo.trim() || !composeBody.trim()) return;
- try {
- const resp = await fetch('http://localhost:8008/send', {
- method: 'POST', headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify({ channel: composeChannel, to: composeTo, content: composeBody, subject: composeSubject || undefined }),
- });
- if (resp.ok) { setSendStatus('✅ Sent'); setComposeTo(''); setComposeBody(''); setComposeSubject(''); setTimeout(() => setSendStatus(null), 3000); }
- else { const d = await resp.json().catch(() => ({})); setSendStatus(`❌ ${d.detail || 'Failed'}`); }
- } catch { setSendStatus('❌ Network error'); }
- }, [composeChannel, composeTo, composeBody, composeSubject]);
-
+ const handleSend = useCallback(async () => { if (!composeTo.trim() || !composeBody.trim()) return; try { const resp = await fetch('http://localhost:8008/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: composeChannel, to: composeTo, content: composeBody, subject: composeSubject || undefined }) }); if (resp.ok) { setSendStatus('✅ Sent'); setComposeTo(''); setComposeBody(''); setComposeSubject(''); setTimeout(() => setSendStatus(null), 3000); } else { const d = await resp.json().catch(() => ({})); setSendStatus(`❌ ${d.detail || 'Failed'}`); } } catch { setSendStatus('❌ Network error'); } }, [composeChannel, composeTo, composeBody, composeSubject]);
  const activeChannels = Object.entries(channels).filter(([, v]) => v.configured);
 
  return (
  <div className="messaging-panel">
  <h3 className="panel-title">{t('messaging.title')}</h3>
-
- {/* Channel status */}
- <div className="messaging-channels">
- <span className="messaging-channels-label">{t('messaging.channels')}:</span>
- {activeChannels.length === 0 ? <span className="settings-note">{t('messaging.no_channels')}</span> : (
- activeChannels.map(([name]) => (
- <span key={name} className="channel-badge">
- {name === 'telegram' ? '✈️' : name === 'whatsapp' ? '📱' : '📧'} {t(`messaging.channel_${name}` as any)} — {t('messaging.status_connected')}
- </span>
- ))
- )}
- <button className="refresh-btn-sm" onClick={fetchInbox} disabled={loading}>{loading ? '...' : '🔄'}</button>
- </div>
-
+ <div className="messaging-channels"><span className="messaging-channels-label">{t('messaging.channels')}:</span>{activeChannels.length === 0 ? <span className="settings-note">{t('messaging.no_channels')}</span> : activeChannels.map(([name]) => (<span key={name} className="channel-badge">{name === 'telegram' ? '✈️' : name === 'whatsapp' ? '📱' : '📧'} {t(`messaging.channel_${name}` as any)} — {t('messaging.status_connected')}</span>))}<button className="refresh-btn-sm" onClick={fetchInbox} disabled={loading}>{loading ? '...' : '🔄'}</button></div>
  <div className="messaging-layout">
- {/* Inbox */}
- <div className="messaging-inbox">
- <h4 className="inbox-title">{t('messaging.inbox')} ({messages.length})</h4>
- {messages.length === 0 ? <div className="memory-empty">{t('memory.empty')}</div> : (
- messages.map((msg, i) => (
- <div key={i} className="inbox-item">
- <div className="inbox-meta">
- <span className="inbox-channel">{msg.channel === 'telegram' ? '✈️' : msg.channel === 'whatsapp' ? '📱' : '📧'}</span>
- <span className="inbox-sender">{msg.sender}</span>
- <span className="inbox-time">{msg.timestamp ? new Date(msg.timestamp).toLocaleString() : ''}</span>
- </div>
- {msg.subject && <div className="inbox-subject">{msg.subject}</div>}
- <div className="inbox-content">{msg.content.slice(0, 200)}{msg.content.length > 200 ? '...' : ''}</div>
- </div>
- ))
- )}
- </div>
-
- {/* Compose */}
- <div className="messaging-compose">
- <h4 className="inbox-title">{t('messaging.compose')}</h4>
- <select className="chat-select" value={composeChannel} onChange={(e) => setComposeChannel(e.target.value)}>
- <option value="telegram">✈️ Telegram</option>
- <option value="whatsapp">📱 WhatsApp</option>
- <option value="email">📧 Email</option>
- </select>
- <input className="chat-input" placeholder={t('messaging.to')} value={composeTo} onChange={(e) => setComposeTo(e.target.value)} style={{ marginTop: 6 }} />
- {composeChannel === 'email' && <input className="chat-input" placeholder={t('messaging.subject')} value={composeSubject} onChange={(e) => setComposeSubject(e.target.value)} style={{ marginTop: 6 }} />}
- <textarea className="chat-input messaging-textarea" placeholder={t('messaging.body')} value={composeBody} onChange={(e) => setComposeBody(e.target.value)} rows={4} style={{ marginTop: 6 }} />
- <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
- <button className="save-btn" onClick={handleSend}>{t('messaging.send')}</button>
- {sendStatus && <span className="save-feedback">{sendStatus}</span>}
- </div>
- </div>
+ <div className="messaging-inbox"><h4 className="inbox-title">{t('messaging.inbox')} ({messages.length})</h4>{messages.length === 0 ? <div className="memory-empty">{t('memory.empty')}</div> : messages.map((msg, i) => (<div key={i} className="inbox-item"><div className="inbox-meta"><span className="inbox-channel">{msg.channel === 'telegram' ? '✈️' : msg.channel === 'whatsapp' ? '📱' : '📧'}</span><span className="inbox-sender">{msg.sender}</span><span className="inbox-time">{msg.timestamp ? new Date(msg.timestamp).toLocaleString() : ''}</span></div>{msg.subject && <div className="inbox-subject">{msg.subject}</div>}<div className="inbox-content">{msg.content.slice(0, 200)}{msg.content.length > 200 ? '...' : ''}</div></div>))}</div>
+ <div className="messaging-compose"><h4 className="inbox-title">{t('messaging.compose')}</h4><select className="chat-select" value={composeChannel} onChange={(e) => setComposeChannel(e.target.value)}><option value="telegram">✈️ Telegram</option><option value="whatsapp">📱 WhatsApp</option><option value="email">📧 Email</option></select><input className="chat-input" placeholder={t('messaging.to')} value={composeTo} onChange={(e) => setComposeTo(e.target.value)} style={{ marginTop: 6 }} />{composeChannel === 'email' && <input className="chat-input" placeholder={t('messaging.subject')} value={composeSubject} onChange={(e) => setComposeSubject(e.target.value)} style={{ marginTop: 6 }} />}<textarea className="chat-input messaging-textarea" placeholder={t('messaging.body')} value={composeBody} onChange={(e) => setComposeBody(e.target.value)} rows={4} style={{ marginTop: 6 }} /><div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}><button className="save-btn" onClick={handleSend}>{t('messaging.send')}</button>{sendStatus && <span className="save-feedback">{sendStatus}</span>}</div></div>
  </div>
  </div>
  );
@@ -739,10 +690,13 @@ export default function App() {
  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
  const [currentTime, setCurrentTime] = useState(new Date());
  const [providerStatuses, setProviderStatuses] = useState<ProviderStatus[]>([]);
+ const [liveModels, setLiveModels] = useState<Record<string, LiveModel[]>>({});
+ const [onboarding, setOnboarding] = useState<OnboardingData>(loadOnboarding);
 
  useEffect(() => { initLocale(); }, []);
  useEffect(() => { const interval = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(interval); }, []);
 
+ // Fetch provider statuses periodically
  useEffect(() => {
  async function fetchStatuses() {
  try { const resp = await fetch('http://localhost:8003/providers'); if (resp.ok) { const data = await resp.json(); setProviderStatuses(data.providers || []); } } catch {}
@@ -751,6 +705,39 @@ export default function App() {
  const interval = setInterval(fetchStatuses, 30000);
  return () => clearInterval(interval);
  }, []);
+
+ // Fetch live models for all configured providers on mount and when keys change
+ const refreshModelsForProvider = useCallback(async (provider: string) => {
+ try {
+ const resp = await fetch(`http://localhost:8003/models/refresh?provider=${provider}`);
+ if (resp.ok) {
+ const d = await resp.json();
+ const models = d.providers?.[provider]?.models || [];
+ setLiveModels(prev => ({ ...prev, [provider]: models }));
+ }
+ } catch {}
+ }, []);
+
+ useEffect(() => {
+ providerStatuses.filter(s => s.configured).forEach(s => refreshModelsForProvider(s.name));
+ }, [providerStatuses, refreshModelsForProvider]);
+
+ const handleOnboardingComplete = (data: OnboardingData) => {
+ setOnboarding(data);
+ setLocale(data.locale);
+ };
+
+ // Welcome message with user's name
+ const welcomeMessage = onboarding.completed && onboarding.userName
+ ? (onboarding.locale === 'fr'
+ ? `Bonjour ${onboarding.userName}, je suis Jarvis. Comment puis-je vous aider aujourd'hui ?`
+ : `Hello ${onboarding.userName}, I'm Jarvis. How can I help you today?`)
+ : undefined;
+
+ // Show onboarding if not completed
+ if (!onboarding.completed) {
+ return <OnboardingWizard onComplete={handleOnboardingComplete} />;
+ }
 
  const tabs: { id: Tab; labelKey: string; icon: string }[] = [
  { id: 'dashboard', labelKey: 'nav.dashboard', icon: '◈' },
@@ -781,12 +768,12 @@ export default function App() {
  </header>
 
  <main className="hud-main">
- {activeTab === 'dashboard' && <DashboardView statuses={providerStatuses} />}
- {activeTab === 'chat' && <ChatPanel />}
+ {activeTab === 'dashboard' && <DashboardView statuses={providerStatuses} liveModels={liveModels} />}
+ {activeTab === 'chat' && <ChatPanel welcomeMessage={welcomeMessage} />}
  {activeTab === 'sessions' && <SessionsPanel />}
- {activeTab === 'agents' && <AgentsDetailView statuses={providerStatuses} />}
+ {activeTab === 'agents' && <AgentsDetailView statuses={providerStatuses} liveModels={liveModels} onRefresh={refreshModelsForProvider} />}
  {activeTab === 'messaging' && <MessagingPanel />}
- {activeTab === 'settings' && <SettingsPanel />}
+ {activeTab === 'settings' && <SettingsPanel onKeysChanged={() => providerStatuses.filter(s => s.configured).forEach(s => refreshModelsForProvider(s.name))} />}
  {activeTab === 'memory' && <MemoryView />}
  </main>
 
