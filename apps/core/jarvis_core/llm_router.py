@@ -547,6 +547,93 @@ class LLMRouter:
             },
         )
 
+    async def fetch_provider_models(self, provider: str) -> list[dict[str, Any]]:
+        """Fetch live model list from a provider's /models API endpoint.
+
+        Returns list of dicts with id, name, and optional pricing/context info.
+        Raises LLMRouterError if provider unconfigured or API call fails.
+        """
+        if provider not in PROVIDERS:
+            raise LLMRouterError(f"Unknown provider: {provider}")
+
+        api_configs: dict[str, tuple[str, dict[str, str]]] = {
+            "anthropic": (
+                "https://api.anthropic.com/v1/models",
+                {"x-api-key": settings.anthropic_api_key, "anthropic-version": "2023-06-01"},
+            ),
+            "openai": (
+                "https://api.openai.com/v1/models",
+                {"Authorization": f"Bearer {settings.openai_api_key}"},
+            ),
+            "google": (
+                "https://generativelanguage.googleapis.com/v1beta/models",
+                {"x-goog-api-key": settings.google_api_key},
+            ),
+            "moonshot": (
+                "https://api.moonshot.cn/v1/models",
+                {"Authorization": f"Bearer {settings.moonshot_api_key}"},
+            ),
+            "minimax": (
+                "https://api.minimax.chat/v1/models",
+                {"Authorization": f"Bearer {settings.minimax_api_key}"},
+            ),
+            "zhipu": (
+                "https://open.bigmodel.cn/api/paas/v4/models",
+                {"Authorization": f"Bearer {settings.zhipu_api_key}"},
+            ),
+            "openrouter": (
+                "https://openrouter.ai/api/v1/models",
+                {"Authorization": f"Bearer {settings.openrouter_api_key}"},
+            ),
+        }
+
+        if provider == "ollama":
+            if self._validated_ollama_url is None:
+                raise LLMRouterError("Ollama not configured")
+            resp = await self._client.get(f"{self._validated_ollama_url}/api/tags")
+            resp.raise_for_status()
+            data = resp.json()
+            return [
+                {"id": m["name"], "name": m["name"], "size_mb": round(m.get("size", 0) / 1024 / 1024)}
+                for m in data.get("models", [])
+            ]
+
+        if provider not in api_configs:
+            raise LLMRouterError(f"No API config for {provider}")
+
+        url, headers = api_configs[provider]
+        key_map = {
+            "anthropic": settings.anthropic_api_key,
+            "openai": settings.openai_api_key,
+            "google": settings.google_api_key,
+            "moonshot": settings.moonshot_api_key,
+            "minimax": settings.minimax_api_key,
+            "zhipu": settings.zhipu_api_key,
+            "openrouter": settings.openrouter_api_key,
+        }
+        if not key_map.get(provider):
+            raise LLMRouterError(f"{provider} API key not configured")
+
+        resp = await self._client.get(url, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
+
+        # Normalize different API response formats
+        models_raw = data.get("data", data.get("models", []))
+        models = []
+        for m in models_raw:
+            model_id = m.get("id", m.get("name", ""))
+            if not model_id:
+                continue
+            models.append({
+                "id": model_id,
+                "name": m.get("display_name", m.get("name", model_id)),
+                "owned_by": m.get("owned_by", ""),
+            })
+
+        logger.info("llm.models_fetched", provider=provider, count=len(models))
+        return models
+
     def get_available_providers(self) -> list[dict[str, Any]]:
         """Return list of configured providers with their status."""
         key_map = {

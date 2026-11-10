@@ -1,0 +1,14 @@
+[Unit]
+Description=Jarvis Messaging (Telegram, WhatsApp, Email)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/projects/jarvis/services/messaging
+ExecStart=%h/projects/jarvis/.venv/bin/python -m jarvis_messaging.main
+Restart=on-failure
+RestartSec=5
+Environment=JARVIS_MESSAGING_PORT=8008
+
+[Install]
+WantedBy=default.target

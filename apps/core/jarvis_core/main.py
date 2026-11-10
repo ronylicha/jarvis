@@ -5,6 +5,7 @@ import hmac
 import json
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Any
 
 import structlog
@@ -95,6 +96,28 @@ async def health():
 async def list_providers():
     """List available LLM providers and their configuration status."""
     return {"providers": router.get_available_providers()}
+
+
+@app.get("/models/refresh", dependencies=[Depends(verify_chat_token)])
+async def refresh_models(provider: str | None = None):
+    """Fetch live model lists from provider APIs.
+
+    Returns models with pricing/context from the provider's own /models endpoint.
+    Falls back to static catalog if API call fails.
+    Optional query param `provider` filters to one provider.
+    """
+    results: dict[str, Any] = {}
+    target_providers = [provider] if provider else list(PROVIDERS)
+
+    for prov in target_providers:
+        try:
+            models = await router.fetch_provider_models(prov)
+            results[prov] = {"status": "ok", "models": models, "source": "api"}
+        except Exception as exc:
+            logger.warning("core.models_refresh_error", provider=prov, error=str(exc))
+            results[prov] = {"status": "error", "models": [], "error": str(exc), "source": "fallback"}
+
+    return {"providers": results, "fetched_at": datetime.now(timezone.utc).isoformat()}
 
 
 @app.post("/chat", dependencies=[Depends(verify_chat_token)])

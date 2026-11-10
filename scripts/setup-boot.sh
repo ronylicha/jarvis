@@ -12,7 +12,7 @@ echo "🔧 Setting up Jarvis boot services..."
 mkdir -p "$SYSTEMD_DIR"
 
 # 2. Copy service files
-for svc in jarvis-stt jarvis-tts jarvis-core jarvis-memory jarvis-connectors jarvis-agent-sessions jarvis-pc-actions; do
+for svc in jarvis-stt jarvis-tts jarvis-core jarvis-memory jarvis-connectors jarvis-pc-actions jarvis-agent-sessions jarvis-messaging; do
  if [ -f "$PROJECT_ROOT/systemd/${svc}.service" ]; then
  cp "$PROJECT_ROOT/systemd/${svc}.service" "$SYSTEMD_DIR/"
  echo " ✅ Installed ${svc}.service"
